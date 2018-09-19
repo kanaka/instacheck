@@ -1,0 +1,25 @@
+file       = expression '\nquit\n'
+expression = '(' expression ')'
+           | expression "+" expression (* weight: 10 *)
+           | expression "-" expression (* weight: 20 *)
+           | expression "*" expression
+           | expression "/" nz-number
+           | expression "/" expression
+           | any-number
+any-number = "0"
+           | nz-number
+nz-number  = "1"
+           | #"[1-9][0-9]*"
+           | #"0\.[0-9]+"
+           | #"[1-9][0-9]*\.[0-9]+"
+any-digit  = "0"
+           | nz-digit
+nz-digit   = "1"
+           | "2"
+           | "3"
+           | "4"
+           | "5"
+           | "6"
+           | "7"
+           | "8"
+           | "9"

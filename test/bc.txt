@@ -1,0 +1,80 @@
+Using mend.ebnf to test the 'bc' command line tool
+
+A simple EBNF file for arithmetic expressions that bc accepts is in
+test/bc.ebnf.
+
+Generate a Clojure namespace of top-level generators based on the bc
+EBNF file:
+
+```
+lein run clj test/bc.ebnf --namespace joel.test
+```
+
+Generate a Clojure namespace containing a single function defintion
+that returns a map of generators based on the bc EBNF file:
+
+```
+lein run clj test/bc.ebnf --namespace joel.test --function gen-gc
+```
+
+Generate 10 samples data inputs in the 'tmp/' directory:
+
+```
+lein run samples test/bc.ebnf tmp/sampA_%.bc
+```
+
+Generate 100 samples:
+
+```
+lein run samples test/bc.ebnf --samples 100 tmp/sampB_%.bc
+```
+
+Generate some samples but also output a Clojure EDN data file
+containing the current weights used for generating data. There is one
+weight value for every alternation point (e.g. 'X | Y') contained in
+the EBNF file:
+
+lein run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/samp%.bc
+
+The default weight for each alternation from the EBNF file is 100. In
+other words, every alternative at a given point in the grammar will
+have even weighting when the test data is generated. As an example,
+adjust the weights for the following two paths to 10 as follows:
+
+    ...
+    [:any-number :alt 0] 10
+    ...
+    [:nz-number :alt 0] 10
+    ...
+
+These two paths represent the weights for the literal "0" and the
+literal "1" (although they occur in two different rules due to the
+structure of the EBNF file).
+
+Now run the same command again to generate new samples using the
+updated weights file:
+
+```
+lein run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/sampC_%.bc
+```
+
+Compare the files for tmp/sampA_*.bc and tmp/sampC_*.bc to see how the
+weight adjustment affect the output.
+
+Now run the check program to generate samples and test them against
+a program. The 'testbc.sh' script is used to wrap the standard bc
+command and return an error code if bc encounters an error (such as
+divide by zero):
+
+```
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
+```
+
+The check program will repeatedly generate and test the samples
+against the target program until a failure is reported or until 10
+samples have been tested (this can be increased using the --iterations
+command line option). When the check program encounters an error it
+will generate smaller test samples based on the failing case and
+attempt to find smaller and smaller samples that also fail. After
+a best effort it will stop.
+

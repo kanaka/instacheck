@@ -1,0 +1,13 @@
+{[:any-number :alt 0] 10,
+ [:any-number :alt 1] 100,
+ [:expression :alt 0] 100,
+ [:expression :alt 1] 1000,
+ [:expression :alt 2] 1000,
+ [:expression :alt 3] 2000,
+ [:expression :alt 4] 1000,
+ [:expression :alt 5] 2000,
+ [:expression :alt 6] 100,
+ [:nz-number :alt 0] 10,
+ [:nz-number :alt 1] 100,
+ [:nz-number :alt 2] 100,
+ [:nz-number :alt 3] 100}
