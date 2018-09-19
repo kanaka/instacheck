@@ -24,7 +24,7 @@ lein install
 ```
 
 
-## Usage Examples
+## Commandline Usage
 
 All the following example use the `test/bc.ebnf` EBNF grammar file
 which specifies a simple EBNF for generating commands that can be run
