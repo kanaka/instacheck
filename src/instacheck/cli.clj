@@ -161,16 +161,23 @@
                 (output-samples ctx (first (:arguments cmd-opts)) samples))
 
               "check"
-              (instacheck/run-check
-                (select-keys ctx [:iterations])
-                (instacheck/ebnf-gen ctx ebnf-grammar)
-                (fn [sample]
-                  (run-test ctx
-                            (:arguments cmd-opts)
-                            sample))
-                (fn [r]
-                  (when (:verbose ctx)
-                    (prn :report (dissoc r :property)))))
+              (let [cur-state (atom nil)
+                    qc-res (instacheck/run-check
+                             (select-keys ctx [:iterations])
+                             (instacheck/ebnf-gen ctx ebnf-grammar)
+                             (fn [sample]
+                               (run-test ctx
+                                         (:arguments cmd-opts)
+                                         sample))
+                             (fn [r]
+                               (when (:verbose ctx)
+                                 (prn :report (dissoc r :property)))
+                               (when (not (= @cur-state (:type r)))
+                                 (reset! cur-state (:type r))
+                                 (println (str "New State: " (name (:type r)) "\n")))))]
+                (println "Final Result:")
+                (pprint qc-res)
+                (:result qc-res))
 
               "parse"
               (let [;; Get the full set of zero'd out weights by
@@ -191,6 +198,7 @@
                 (reset! (:weights-res ctx)
                         (merge base-weights
                                (frequencies paths)))))]
+
     (when-let [wfile (:weights-output opts)]
       (pr-err "Saving weights to" wfile)
       (save-weights ctx wfile))
