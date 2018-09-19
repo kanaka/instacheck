@@ -1,4 +1,6 @@
-# Instacheck: Property-based testing with inputs defined as EBNF grammars
+# Instacheck
+
+**Property-based testing with inputs defined as EBNF grammars**
 
 ## Prerequisites:
 
@@ -32,20 +34,20 @@ Generate Clojure generators (one generator per EBNF rule named after
 the non-terminal):
 
 ```
-lein with-profile ebnf run clj test/bc.ebnf --namespace bc.test
+lein run clj test/bc.ebnf --namespace bc.test
 ```
 
 Generate a single Clojure generator (one generator named `gen-gc`):
 
 ```
-lein with-profile ebnf run clj test/bc.ebnf --namespace bc.test --function gen-bc
+lein run clj test/bc.ebnf --namespace bc.test --function gen-bc
 ```
 
 Generate 10 and then 100 samples:
 
 ```
-lein with-profile ebnf run samples test/bc.ebnf tmp/samp%.bc
-lein with-profile ebnf run samples test/bc.ebnf --samples 100 tmp/samp%.bc
+lein run samples test/bc.ebnf tmp/samp%.bc
+lein run samples test/bc.ebnf --samples 100 tmp/samp%.bc
 ```
 
 Output the full set of weights to a file, modify the weights file and
@@ -53,9 +55,9 @@ then generate 10 samples using the modified weights file:
 
 ```
 rm tmp/samp*
-lein with-profile ebnf run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/samp%.bc
+lein run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/samp%.bc
     # tweak 0 and 1 lower (10), +,- to 1000, *,/ to 2000
-lein with-profile ebnf run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/samp%.bc
+lein run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/samp%.bc
 ```
 
 Run the test program using test samples, then update the weights file
@@ -64,9 +66,9 @@ divide by zero):
 
 ```
 rm tmp/samp*
-lein with-profile ebnf run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
     # tweak 0 to increase frequency
-lein with-profile ebnf run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
 ```
 
 ## License
