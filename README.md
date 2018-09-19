@@ -1,6 +1,6 @@
 # Instacheck
 
-**Property-based testing with inputs defined as EBNF grammars**
+**Instaparse meets test.check: property-based testing with inputs defined as EBNF grammars**
 
 ## Prerequisites:
 
