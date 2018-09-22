@@ -8,7 +8,7 @@
 
   :dependencies [[org.clojure/clojure "1.9.0-alpha14"]
                  [com.rpl/specter "1.0.0"]
-                 [com.gfredericks/test.chuck "0.2.7"]
+                 [com.gfredericks/test.chuck "0.2.9"]
                  [org.clojure/tools.cli "0.3.5"]
 
                  ;; Patched versions

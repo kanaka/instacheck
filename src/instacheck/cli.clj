@@ -27,42 +27,36 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Command line usage
 
-(defn output-samples
-  [ctx raw-path samples]
-  (let [subst (re-find #"%" raw-path)
-        raw-path (if subst raw-path (str raw-path "%"))]
-    (doseq [[idx sample] (map-indexed vector samples)]
-      (let [path (string/replace raw-path #"%" (str idx))]
-        (println "Generating" path)
-        (spit path sample)))))
+(defn interpolate-path [template value]
+  (let [subst (re-find #"%" template)
+        template (if subst template (str template "%"))]
+    (string/replace template #"%" (str value))))
 
-(defn temp-file [prefix suffix & [dir]]
-  (if dir
-    (java.io.File/createTempFile prefix suffix (java.io.File. dir))
-    (java.io.File/createTempFile prefix suffix)))
+(defn output-samples
+  [ctx path-template samples]
+  (doseq [[idx sample] (map-indexed vector samples)]
+    (let [path (interpolate-path path-template idx)]
+      (println "Generating" path)
+      (spit path sample))))
 
 (defn run-test
-  [ctx raw-cmd sample]
-  (let [sample-dir (:sample-dir ctx)
-        tmp-file (temp-file "sample" ".data" sample-dir)
-        temp-writer (io/writer tmp-file)
-        spath (.getCanonicalPath ^java.io.File tmp-file)
+  [ctx raw-cmd sample-path sample]
+  (let [sfile (clojure.java.io/as-file sample-path)
+        swriter (io/writer sfile)
         cmd (if (seq (keep #(re-find #"%" %) raw-cmd))
-              (map #(string/replace % #"%" spath) raw-cmd)
-              (conj raw-cmd spath))
+              (map #(string/replace % #"%" sample-path) raw-cmd)
+              (conj raw-cmd sample-path))
         res (try
               (println "Running:" (string/join " " cmd))
-              (.write temp-writer sample)
-              (.flush temp-writer)
+              (.write swriter sample)
+              (.flush swriter)
               (apply sh cmd)
               (finally
-                (if (not sample-dir)
-                  (.delete tmp-file))))]
+                (if (:remove-samples ctx)
+                  (.delete sfile))))]
     (when (:verbose ctx)
-      (println (string/trim-newline
-                 (if (= 0 (:exit res))
-                   (:out res)
-                   (:err res)))))
+      (when (:out res) (print "Out:" (:out res)))
+      (when (:err res) (print "Err:" (:err res))))
     (println "Result:"
              (if (= 0 (:exit res))
                "Pass"
@@ -90,7 +84,7 @@
                :default 10]]
    "check" [[nil "--iterations ITERATIONS" "Check/test iterations"
              :default 10]
-            [nil "--sample-dir SAMPLE-DIR" "Generate sample files in SAMPLE-DIR and do not delete them on completion"]]})
+            [nil "--remove-samples" "Remove sample files after test"]]})
 
 (defn opt-errors [opts]
   (when (:errors opts)
@@ -100,8 +94,8 @@
 
 (defn usage []
   (pr-err "ebnf [GLOBAL-OPTS] clj     <EBNF-FILE> [CLJ-OPTS]")
-  (pr-err "ebnf [GLOBAL-OPTS] samples <EBNF-FILE> [GEN-OPTS] <PATH>")
-  (pr-err "ebnf [GLOBAL-OPTS] check   <EBNF-FILE> [CHECK-OPTS] -- <CMD>")
+  (pr-err "ebnf [GLOBAL-OPTS] samples <EBNF-FILE> [GEN-OPTS] <SAMPLE_TEMPLATE>")
+  (pr-err "ebnf [GLOBAL-OPTS] check   <EBNF-FILE> [CHECK-OPTS] <SAMPLE_TEMPLATE> -- <CMD>")
   (pr-err "ebnf [GLOBAL-OPTS] parse   <EBNF-FILE> <FILE> [<FILE>...]")
   (System/exit 2))
 
@@ -128,7 +122,7 @@
                                      (:options cmd-opts))))
         ctx (merge (select-keys opts [:debug :verbose :start
                                       :namespace :function :weights
-                                      :sample-dir :grammar-updates])
+                                      :grammar-updates])
                    {:weights-res (atom {})})
         ebnf-parser (instaparse/parser (slurp ebnf))
         ebnf-grammar (instacheck/trim-parser ebnf-parser)
@@ -145,6 +139,13 @@
                      (not (= 1 (count (:arguments cmd-opts)))))
             (usage))
 
+        _ (prn :arguments (:arguments cmd-opts))
+        _ (when (and (= "check" cmd)
+                     (or
+                       (< (count (:arguments cmd-opts)) 3)
+                       (not (= "--" (nth (:arguments cmd-opts) 1)))))
+            (usage))
+
         res (condp = cmd
               "clj"
               (let [gen-src (if (:function opts)
@@ -156,27 +157,37 @@
                        (gen-src ctx ebnf-grammar))))
 
               "samples"
-              (let [samples (gen/sample (instacheck/ebnf-gen ctx ebnf-grammar)
+              (let [sample-template (first (:arguments cmd-opts))
+                    samples (gen/sample (instacheck/ebnf-gen ctx ebnf-grammar)
                                         (Integer. (:samples opts)))]
-                (output-samples ctx (first (:arguments cmd-opts)) samples))
+                (output-samples ctx sample-template samples))
 
               "check"
               (let [cur-state (atom nil)
+                    cur-idx (atom 0)
+                    [sample-template _ & cmd] (:arguments cmd-opts)
                     qc-res (instacheck/run-check
                              (select-keys ctx [:iterations])
                              (instacheck/ebnf-gen ctx ebnf-grammar)
                              (fn [sample]
                                (run-test ctx
-                                         (:arguments cmd-opts)
+                                         cmd
+                                         (interpolate-path sample-template
+                                                           (swap! cur-idx inc))
                                          sample))
                              (fn [r]
                                (when (:verbose ctx)
-                                 (prn :report (dissoc r :property)))
+                                 (prn :report (update-in
+                                                (dissoc r :property)
+                                                [:current-smallest] dissoc :function)))
                                (when (not (= @cur-state (:type r)))
                                  (reset! cur-state (:type r))
-                                 (println (str "New State: " (name (:type r)) "\n")))))]
+                                 (println (str "NEW STATE: " (name (:type r)))))))]
                 (println "Final Result:")
                 (pprint qc-res)
+                (let [fpath (interpolate-path sample-template "final")]
+                  (spit fpath (get-in qc-res [:shrunk :smallest 0]))
+                  (println "Smallest Failure:" fpath))
                 (:result qc-res))
 
               "parse"

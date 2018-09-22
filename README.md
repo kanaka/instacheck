@@ -83,15 +83,17 @@ lein run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/samp%.bc
 lein run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/samp%.bc
 ```
 
-Run the test program using test samples, then update the weights file
-to increase the likelihood of 0 numbers (and thus a failure due to
-divide by zero):
+Generate test samples and run test program using the test samples.
+When a failure is found then continue testing until a more minimal
+test sample is found. Then manually update the weights file to
+increase the likelihood of 0 numbers (and thus a failure due to divide
+by zero) and then run the tests again:
 
 ```bash
 rm tmp/samp*
-lein run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/%.bc -- test/testbc.sh -q %
     # tweak 0 to increase frequency
-lein run check test/bc.ebnf --weights tmp/bc-weights.edn --sample-dir tmp/ -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/%.bc -- test/testbc.sh -q %
 ```
 
 ## License
