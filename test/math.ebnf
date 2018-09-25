@@ -1,0 +1,19 @@
+expression = '(' expression ')'
+           | expression "+" expression
+           | expression "-" expression
+           | expression "*" expression
+           | expression "/" expression
+           | any-number
+any-number = any-digit
+           | nz-digit any-digit+
+any-digit  = "0"
+           | nz-digit
+nz-digit   = "1"
+           | "2"
+           | "3"
+           | "4"
+           | "5"
+           | "6"
+           | "7"
+           | "8"
+           | "9"
