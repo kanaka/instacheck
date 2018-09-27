@@ -83,7 +83,9 @@
    "samples" [[nil "--samples SAMPLES" "Number of samples to generate"
                :default 10
                :parse-fn #(Integer. %)]]
-   "check" [[nil "--iterations ITERATIONS" "Check/test iterations"
+   "check" [["-s" "--seed SEED" "Random seed to use (otherwise automatic)"
+               :parse-fn #(Integer. %)]
+            [nil "--iterations ITERATIONS" "Check/test iterations"
              :default 10
              :parse-fn #(Integer. %)]
             [nil "--remove-samples" "Remove sample files after test"]]})
@@ -177,7 +179,7 @@
                     cur-state (atom nil)
                     cur-idx (atom 0)
                     qc-res (instacheck/run-check
-                             (select-keys opts [:iterations])
+                             (select-keys opts [:iterations :seed])
                              (instacheck/ebnf-gen ctx ebnf-grammar)
                              (fn [sample]
                                (run-test ctx
