@@ -2,10 +2,11 @@
 
 set -e
 
-exp=$(cat "${1}")
+SUT() {
+  python -c "from __future__ import division; print '%d' % ($1)"
+}
+ORACLE() {
+  ruby -e "require 'mathn'; printf '%d', ($1)"
+}
 
-py_result=$(python -c "from __future__ import division; print '%d' % (${exp})")
-rb_result=$(ruby -e "require 'mathn'; printf '%d', (${exp})")
-
-echo "Python result: ${py_result}, Ruby result: ${rb_result}"
-[[ "${py_result}" == "${rb_result}" ]]
+[[ "$(SUT $(cat "$1"))" == "$(ORACLE $(cat "$1"))" ]]
