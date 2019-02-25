@@ -12,17 +12,6 @@ cd instaparse
 lein install
 ```
 
-* Build and install patched test.check that fixes the frequency
-  generator to shrink towards to the more common choices instead of to
-  those listed first:
-```bash
-git clone git@github.com:kanaka/test.check.git
-cd test.check
-git checkout frequency_fix
-lein install
-```
-
-
 ## Library Usage
 
 Add the following to your Clojure dependencies:

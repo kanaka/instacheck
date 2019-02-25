@@ -1,7 +1,6 @@
 (ns instacheck.core
   (:require [clojure.string :as string]
             [clojure.walk :as walk]
-            [clojure.test.check.generators :as gen]
             [com.rpl.specter :refer [setval]]
             [instaparse.core :as instaparse]
             [clojure.test.check]
@@ -10,9 +9,10 @@
             [alandipert.kahn :as kahn]
             [instacheck.util :as util]
 
-            ;; Used in the generated code. Useful to have loaded here
-            ;; for REPL debugging.
+            ;; Used to eval generated code.
+            [clojure.test.check.generators :as gen]
             [com.gfredericks.test.chuck.generators :as chuck]
+            [instacheck.generators :as igen]
 
             ;; Convenient to have already loaded for testing
             [clojure.pprint :refer [pprint]]))
@@ -73,7 +73,7 @@
     (if (= 1 (count (-> tree :parsers)))
       (gen-ROUTE (update-in ctx [:path] conj 0)
                  (-> tree :parsers first) indent)
-      (str pre "(gen/frequency [\n"
+      (str pre "(igen/freq [\n"
            (string/join
              "\n"
 	     (for [[idx t] (map-indexed vector (-> tree :parsers))
@@ -401,6 +401,7 @@
 "(ns " nsname "
   (:require [clojure.test.check.generators :as gen]
             [com.gfredericks.test.chuck.generators :as chuck]
+            [instacheck.generators :as igen]
             [instacheck.util :as util]))
 
 "))
