@@ -1,3 +1,4 @@
+line = expression '\n'?
 expression = "(" expression ")"
            | expression "+" expression
            | expression "-" expression

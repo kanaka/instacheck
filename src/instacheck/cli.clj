@@ -210,13 +210,23 @@
                     _ (instacheck/grammar->generator-defs-source ctx ebnf-grammar)
                     base-weights (into {} (for [[k v] @(:weights-res ctx)]
                                             [k 0]))
-                    ;; Parse each file to get a cumulative list of
-                    ;; grammar paths
-                    paths (mapcat #(-> (instaparse/parse ebnf-parser (slurp %)
+                    ;; Parse each file
+                    results (map #(instaparse/parse ebnf-parser (slurp %)
                                                     :unhide :all)
-                                       meta
-                                       :path-log)
-                                  cmd-args)]
+                                 cmd-args)
+                    ;; Accumulate list of failed parses
+                    failures (filter (comp instaparse/failure? first)
+                                     (zipmap results cmd-args))
+                    ;; Accumulative list of grammar paths
+                    paths (mapcat #(-> % meta :path-log) results)]
+
+                ;; Report any parse failures and stop
+                (when (seq failures)
+                  (doseq [failure failures]
+                    (println (str "Parse failure for '" (second failure) "':"))
+                    (println (first failure)))
+                  (throw (Exception. "Parse failure(s)")))
+
                 ;; Merge the grammar path frequencies onto the zero'd
                 ;; out weights
                 (reset! (:weights-res ctx)
