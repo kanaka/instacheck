@@ -25,19 +25,22 @@
     (flush)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Command line usage
+;; Command line utilities
 
-(defn interpolate-path [template value]
-  (let [subst (re-find #"%" template)
-        template (if subst template (str template "%"))]
-    (string/replace template #"%" (str value))))
+(defn sample-path
+  [dir suffix]
+  (str (io/file dir (if (number? suffix)
+                      (format "sample-%04d" suffix)
+                      (format "sample-%s" suffix)))))
 
 (defn output-samples
-  [ctx path-template samples]
+  [ctx dir samples]
+  (printf "Saving samples to %s - %s\n"
+          (sample-path dir 0) (sample-path dir (count samples)))
+  (io/make-parents (sample-path dir 0))
   (doseq [[idx sample] (map-indexed vector samples)]
-    (let [path (interpolate-path path-template idx)]
-      (println "Generating" path)
-      (spit path sample))))
+    (let [f (io/file (sample-path dir idx))]
+      (spit f sample))))
 
 (defn run-test
   [ctx raw-cmd sample-path sample]
@@ -120,9 +123,9 @@
     (pr-err (string/join \newline errors) "\n"))
   (pr-err "Usage:")
   (pr-err "  instacheck clj     [OPTIONS] <EBNF-FILE> <NAMESPACE>")
-  (pr-err "  instacheck samples [OPTIONS] <EBNF-FILE> <SAMPLE_TEMPLATE>")
+  (pr-err "  instacheck samples [OPTIONS] <EBNF-FILE> <SAMPLE_DIR>")
   (pr-err "  instacheck parse   [OPTIONS] <EBNF-FILE> <FILE>...")
-  (pr-err "  instacheck check   [OPTIONS] <EBNF-FILE> <SAMPLE_TEMPLATE> -- <CMD>")
+  (pr-err "  instacheck check   [OPTIONS] <EBNF-FILE> <SAMPLE_DIR> -- <CMD>")
   (pr-err)
   (pr-err cli-summary)
   (System/exit 2))
@@ -141,12 +144,12 @@
            (gen-src ctx grammar)))))
 
 (defn do-samples
-  [ctx parser template number]
-  (when (not template)
-    (usage ["samples mode requires TEMPLATE path"]))
+  [ctx parser dir number]
+  (when (not dir)
+    (usage ["samples mode requires SAMPLE_DIR"]))
   (let [grammar (instacheck/parser->grammar parser)
         samples (gen/sample (instacheck/ebnf-gen ctx grammar) number)]
-    (output-samples ctx template samples)))
+    (output-samples ctx dir samples)))
 
 (defn do-parse
   [ctx parser files]
@@ -164,18 +167,19 @@
     (reset! (:weights-res ctx) weights)))
 
 (defn do-check
-  [ctx parser template cmd opts]
-  (when (not template)
-    (usage ["check mode requires TEMPLATE path"]))
+  [ctx parser dir cmd opts]
+  (when (not dir)
+    (usage ["check mode requires SAMPLE_DIR"]))
   (when (empty? cmd)
     (usage ["check mode requires CMD args"]))
+  (io/make-parents (sample-path dir 0))
   (let [grammar (instacheck/parser->grammar parser)
         cur-state (atom nil)
         cur-idx (atom 0)
         check-fn (fn [sample]
                    (run-test ctx
                              cmd
-                             (interpolate-path template (swap! cur-idx inc))
+                             (sample-path dir (swap! cur-idx inc))
                              sample))
         report-fn (fn [r]
                     (when (:verbose ctx)
@@ -192,7 +196,7 @@
     (println "Final Result:")
     (pprint qc-res)
     (when (not (:result qc-res))
-      (let [fpath (interpolate-path template "final")]
+      (let [fpath (sample-path dir "final")]
         (spit fpath (get-in qc-res [:shrunk :smallest 0]))
         (println "Smallest Failure:" fpath)))
     (:result qc-res)))
