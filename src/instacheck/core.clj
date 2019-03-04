@@ -22,7 +22,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; General utilities
 
-(defn trim-parser
+(defn parser->grammar
+  "Takes a instaparse parser and returns an instacheck grammar: the
+  :grammar value from the parser with a metadata map containing the
+  start rule (:start)."
   [parser]
   (with-meta
     (util/remove-key (:grammar parser) :red)
@@ -30,19 +33,7 @@
 
 (defn load-grammar
   [ebnf]
-  (trim-parser (instaparse/parser ebnf)))
-
-(defn run-check [opts gen-to-check check-fn report-fn]
-  (let [{:keys [iterations seed max-size]
-	 :or {iterations 10
-	      ;;seed 1
-	      max-size 200
-              }} opts
-	p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
-    (clojure.test.check/quick-check iterations p
-                                    :seed seed
-                                    :max-size max-size
-                                    :reporter-fn report-fn)))
+  (parser->grammar (instaparse/parser ebnf)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Create test.check generators for sub-trees of an
@@ -416,4 +407,62 @@
   (spit "joel/gen.clj" (grammar->ns {:namespace "joel.gen"}
                                     ebnf-grammar))
 )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Test execution and parsing utilties
+
+(defn run-check [opts gen-to-check check-fn report-fn]
+  "Run quick-check against a generator (gen-to-check) using a check
+  function (check-fn) and reporter functon (report-fn). Execution
+  options (opts) supported are :iterations (default: 10), :max-size
+  (default: 200), and :seed."
+  (let [{:keys [iterations seed max-size]
+	 :or {iterations 10
+	      ;;seed 1
+	      max-size 200
+              }} opts
+	p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
+    (clojure.test.check/quick-check iterations p
+                                    :seed seed
+                                    :max-size max-size
+                                    :reporter-fn report-fn)))
+
+(defn parse
+  "Use parser to parse text. On success returns the parsed AST. On
+  error, throws an ex-info map containing the :failure (instaparse Failure
+  object), :text (the original text), and :location (optional location
+  parameter)."
+  [parser text & [location]]
+  (let [result (instaparse/parse parser text :unhide :all)]
+    (when (instaparse/failure? result)
+      (throw (ex-info "Parse error" {:failure result
+                                     :text text
+                                     :location location})))
+    result))
+
+(defn parse-weights
+  "Use parser to parse a sequence of text description objects {:text
+  text :location location}. Returns a weights map with the weights set
+  to the number of times that path in the grammar was followed/used
+  across all the texts from text-objs."
+  [parser text-objs]
+  (let [grammar (parser->grammar parser)
+	;; Get the full set of zero'd out weights by
+	;; calling the def generator but throwing away the
+	;; result. The weights are in the context atom.
+        ctx {:weights-res (atom {})}
+        _ (grammar->generator-defs-source ctx grammar)
+        zero-weights (into {} (for [[k v] @(:weights-res ctx)] [k 0]))
+        ;; Parse each text string
+        results (for [{:keys [text location]} text-objs]
+                  (parse parser text location))]
+    (merge zero-weights
+           (frequencies
+             (mapcat #(-> % meta :path-log) results)))))
+
+(defn parse-weights-from-files
+  "Wrapper around parse-weights that marshals the text objects from
+  a list of file paths."
+  [parser files]
+  (parse-weights parser (for [f files] {:text (slurp f) :location f})))
 

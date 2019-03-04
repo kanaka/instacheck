@@ -142,7 +142,7 @@
                                       :grammar-updates])
                    {:weights-res (atom {})})
         ebnf-parser (instaparse/parser (slurp ebnf))
-        ebnf-grammar (instacheck/trim-parser ebnf-parser)
+        ebnf-grammar (instacheck/parser->grammar ebnf-parser)
 
         ;;_ (prn :ctx ctx)
 
@@ -204,34 +204,17 @@
                 (:result qc-res))
 
               "parse"
-              (let [;; Get the full set of zero'd out weights by
-                    ;; calling the def generator but throwing away the
-                    ;; result. The weights are in the context atom.
-                    _ (instacheck/grammar->generator-defs-source ctx ebnf-grammar)
-                    base-weights (into {} (for [[k v] @(:weights-res ctx)]
-                                            [k 0]))
-                    ;; Parse each file
-                    results (map #(instaparse/parse ebnf-parser (slurp %)
-                                                    :unhide :all)
-                                 cmd-args)
-                    ;; Accumulate list of failed parses
-                    failures (filter (comp instaparse/failure? first)
-                                     (zipmap results cmd-args))
-                    ;; Accumulative list of grammar paths
-                    paths (mapcat #(-> % meta :path-log) results)]
-
-                ;; Report any parse failures and stop
-                (when (seq failures)
-                  (doseq [failure failures]
-                    (println (str "Parse failure for '" (second failure) "':"))
-                    (println (first failure)))
-                  (throw (Exception. "Parse failure(s)")))
-
-                ;; Merge the grammar path frequencies onto the zero'd
-                ;; out weights
-                (reset! (:weights-res ctx)
-                        (merge base-weights
-                               (frequencies paths)))))]
+              (let [weights
+                    (try
+                      (instacheck/parse-weights-from-files
+                        ebnf-parser cmd-args)
+                      (catch Exception e
+                        (let [{:keys [text failure location]} (ex-data e)]
+                          (println (str "Parse error in '" location "':"))
+                          (println failure)
+                          (System/exit 1))))]
+                ;; Update the ctx result weights
+                (reset! (:weights-res ctx) weights)))]
 
     (when-let [wfile (:weights-output opts)]
       (pr-err "Saving weights to" wfile)
