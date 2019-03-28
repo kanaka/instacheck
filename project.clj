@@ -1,4 +1,4 @@
-(defproject instacheck "0.2.0"
+(defproject instacheck "0.3.0"
   :description "Property-based testing with inputs defined as EBNF grammars"
   :url "https://github.com/kanaka/instacheck"
   :license {:name "Mozilla Public License version 2"

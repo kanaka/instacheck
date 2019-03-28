@@ -17,7 +17,7 @@ lein install
 Add the following to your Clojure dependencies:
 
 ```clojure
-[instacheck "0.2.0"]
+[instacheck "0.3.0"]
 ```
 
 Require instacheck and use it to generate test cases based on a
