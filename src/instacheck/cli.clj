@@ -49,14 +49,11 @@
         cmd (if (seq (keep #(re-find #"%" %) raw-cmd))
               (map #(string/replace % #"%" sample-path) raw-cmd)
               (conj raw-cmd sample-path))
-        res (try
+        res (do
               (println "Running:" (string/join " " cmd))
               (.write swriter sample)
               (.flush swriter)
-              (apply sh cmd)
-              (finally
-                (if (:remove-samples ctx)
-                  (.delete sfile))))]
+              (apply sh cmd))]
     (when (:verbose ctx)
       (when (:out res) (print "Out:" (:out res)))
       (when (:err res) (print "Err:" (:err res))))
@@ -66,9 +63,30 @@
                (str "Fail (exit code " (:exit res) ")")))
     (zero? (:exit res))))
 
+(defn check-and-report
+  [ctx generator dir cmd opts]
+  (io/make-parents (sample-path dir 0))
+  (let [cur-state (atom nil)
+        cur-idx (atom 0)
+        check-fn (fn [sample]
+                   (run-test ctx
+                             cmd
+                             (sample-path dir (swap! cur-idx inc))
+                             sample))
+        report-fn (fn [r]
+                    (when (:verbose ctx)
+                      (prn :report (update-in
+                                     (dissoc r :property)
+                                     [:current-smallest] dissoc :function)))
+                    (when (not (= @cur-state (:type r)))
+                      (reset! cur-state (:type r))
+                      (pr-err (str "NEW STATE: " (name (:type r))))))
+        res (instacheck/run-check opts generator check-fn report-fn)]
+    res))
+
 (defn save-weights [ctx file]
   (when file
-    (pr-err "Saving weights to" file)
+    (pr-err "Saving weights to" (str file))
     (spit file (with-out-str (pprint (into (sorted-map)
                                            @(:weights-res ctx)))))))
 
@@ -92,21 +110,31 @@
    ["-h" "--help"]])
 
 (def cmd-options
-  {"clj"     [[nil "--function FUNCTION"
-               "Generate one function that returns a map of generators"]]
-   "samples" [[nil "--samples SAMPLES"
-               "Number of samples to generate"
-               :default 10
-               :parse-fn #(Integer. %)]]
-   "check"   [["-s" "--seed SEED"
-               "Random seed to use (otherwise automatic)"
-               :parse-fn #(Integer. %)]
-              [nil "--iterations ITERATIONS"
-               "Check/test iterations"
-               :default 10
-               :parse-fn #(Integer. %)]
-              [nil "--remove-samples"
-               "Remove sample files after test"]]})
+  {"clj"        [[nil "--function FUNCTION"
+                  "Generate one function that returns a map of generators"]]
+   "samples"    [[nil "--samples SAMPLES"
+                  "Number of samples to generate"
+                  :default 10
+                  :parse-fn #(Integer. %)]]
+   "check-once" [["-s" "--seed SEED"
+                  "Random seed to use (otherwise automatic)"
+                  :parse-fn #(Integer. %)]
+                 [nil "--iterations ITERATIONS"
+                  "Check/test iterations (size increases for one full test run)"
+                  :default 10
+                  :parse-fn #(Integer. %)]]
+   "check"      [[nil "--iterations ITERATIONS"
+                  "Check/test iterations (size increases for one full test run)"
+                  :default 10
+                  :parse-fn #(Integer. %)]
+                 [nil "--runs RUNS"
+                  "Number of times to run test iterations (total tests = runs X iterations)."
+                  :default 1
+                  :parse-fn #(Integer. %)]
+                 [nil "--reduce-fails"
+                  "After each run that finds a failure, reduce the weight of the "
+                  :default 1
+                  :parse-fn #(Integer. %)]]})
 
 ;; Gather up the general and command summary information
 (def cli-summary
@@ -122,10 +150,11 @@
   (when (not (empty? errors))
     (pr-err (string/join \newline errors) "\n"))
   (pr-err "Usage:")
-  (pr-err "  instacheck clj     [OPTIONS] <EBNF-FILE> <NAMESPACE>")
-  (pr-err "  instacheck samples [OPTIONS] <EBNF-FILE> <SAMPLE_DIR>")
-  (pr-err "  instacheck parse   [OPTIONS] <EBNF-FILE> <FILE>...")
-  (pr-err "  instacheck check   [OPTIONS] <EBNF-FILE> <SAMPLE_DIR> -- <CMD>")
+  (pr-err "  instacheck clj        [OPTIONS] <EBNF-FILE> <NAMESPACE>")
+  (pr-err "  instacheck samples    [OPTIONS] <EBNF-FILE> <SAMPLE-DIR>")
+  (pr-err "  instacheck parse      [OPTIONS] <EBNF-FILE> <FILE>...")
+  (pr-err "  instacheck check-once [OPTIONS] <EBNF-FILE> <SAMPLE-DIR> -- <CMD>")
+  (pr-err "  instacheck check      [OPTIONS] <EBNF-FILE> <SAMPLE-DIR> -- <CMD>")
   (pr-err)
   (pr-err cli-summary)
   (System/exit 2))
@@ -173,39 +202,35 @@
   (when (empty? cmd)
     (usage ["check mode requires CMD args"]))
   (io/make-parents (sample-path dir 0))
-  (let [grammar (instacheck/parser->grammar parser)
-        cur-state (atom nil)
-        cur-idx (atom 0)
-        check-fn (fn [sample]
-                   (run-test ctx
-                             cmd
-                             (sample-path dir (swap! cur-idx inc))
-                             sample))
-        report-fn (fn [r]
-                    (when (:verbose ctx)
-                      (prn :report (update-in
-                                     (dissoc r :property)
-                                     [:current-smallest] dissoc :function)))
-                    (when (not (= @cur-state (:type r)))
-                      (reset! cur-state (:type r))
-                      (pr-err (str "NEW STATE: " (name (:type r))))))
-        qc-res (instacheck/run-check
-                 opts
-                 (instacheck/ebnf-gen ctx grammar)
-                 check-fn report-fn)]
-    (println "Final Result:")
-    (pprint qc-res)
-    (when (not (:result qc-res))
-      (let [fpath (sample-path dir "final")]
-        (spit fpath (get-in qc-res [:shrunk :smallest 0]))
-        (println "Smallest Failure:" fpath)))
-    (:result qc-res)))
+  (loop [run 1
+         qc-res {:result true}]
+    (if (> run (:runs opts))
+      qc-res
+      (let [;; For more than 1 run, add a run subdirectory
+            run-dir (if (> (:runs opts) 1)
+                      (str (io/file dir (format "%04d" run)))
+                      dir)
+            res-file (io/file run-dir "result.edn")
+            grammar (instacheck/parser->grammar parser)
+            generator (instacheck/ebnf-gen ctx grammar)
+            qc-res (check-and-report ctx generator run-dir cmd opts)]
+        (save-weights ctx (io/file run-dir "weights.edn"))
+        (pr-err "Saving result map to" (str res-file))
+        (spit res-file qc-res)
+        (println "Result:")
+        (pprint qc-res)
+        (when (not (:result qc-res))
+          (let [fpath (sample-path run-dir "final")]
+            (spit fpath (get-in qc-res [:shrunk :smallest 0]))
+            (println "Smallest Failure:" fpath)))
+        (recur (inc run) qc-res)))))
 
 (defn -main
   [& args]
-  (let [[[cmd & raw-args] [_ & check-cmd]] (split-with #(not= % "--") args)
-        ;; Now do the command specific parsing
-        _ (when-not (#{"clj" "samples" "check" "parse"} cmd)
+  (let [;; General parsing
+        [[cmd & raw-args] [_ & check-cmd]] (split-with #(not= % "--") args)
+        ;; Command specific parsing
+        _ (when-not (#{"clj" "samples" "check-once" "check" "parse"} cmd)
             (usage [(str "Unknown command " cmd)]))
         cmd-opts (parse-opts raw-args (concat general-cli-options
                                               (cmd-options cmd)))
@@ -230,9 +255,13 @@
               (do-samples ctx ebnf-parser (first cmd-args) (:samples opts))
               "parse"
               (do-parse ctx ebnf-parser cmd-args)
+              "check-once"
+              (do-check ctx ebnf-parser (first cmd-args) check-cmd
+                        (merge (select-keys opts [:seed :iterations])
+                               {:runs 1}))
               "check"
               (do-check ctx ebnf-parser (first cmd-args) check-cmd
-                        (select-keys opts [:iterations :seed])))]
+                        (select-keys opts [:runs :iterations])))]
 
     (save-weights ctx (:weights-output opts))
 
