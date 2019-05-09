@@ -46,20 +46,20 @@ Generate Clojure generators (one generator per EBNF rule named after
 the non-terminal):
 
 ```bash
-lein run clj test/bc.ebnf --namespace bc.test
+lein run clj test/bc.ebnf bc.test
 ```
 
 Generate a single Clojure generator (one generator named `gen-gc`):
 
 ```bash
-lein run clj test/bc.ebnf --namespace bc.test --function gen-bc
+lein run clj test/bc.ebnf bc.test --function gen-bc
 ```
 
 Generate 10 and then 100 samples:
 
 ```bash
-lein run samples test/bc.ebnf tmp/samp%.bc
-lein run samples test/bc.ebnf --samples 100 tmp/samp%.bc
+lein run samples test/bc.ebnf tmp/
+lein run samples test/bc.ebnf --samples 100 tmp/
 ```
 
 Output the full set of weights to a file, modify the weights file and
@@ -67,9 +67,9 @@ then generate 10 samples using the modified weights file:
 
 ```bash
 rm tmp/samp*
-lein run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/samp%.bc
-    # tweak 0 and 1 lower (10), +,- to 1000, *,/ to 2000
-lein run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/samp%.bc
+lein run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/
+    # change the weight for 7 (:nz-digit :alt 6) to 1000
+lein run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/
 ```
 
 Generate test samples and run test program using the test samples.
@@ -80,9 +80,9 @@ by zero) and then run the tests again:
 
 ```bash
 rm tmp/samp*
-lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/%.bc -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh -q %
     # tweak 0 to increase frequency
-lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/%.bc -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh -q %
 ```
 
 ## License
