@@ -241,11 +241,17 @@
         _ (when (not ebnf) (usage ["EBNF-FILE required"]))
         opts (into {} (filter (comp not nil? second)
                               (:options cmd-opts)))
-        ctx (merge (select-keys opts [:debug :verbose :start
-                                      :namespace :function :weights
-                                      :grammar-updates])
-                   {:weights-res (atom {})})
         ebnf-parser (instaparse/parser (slurp ebnf))
+        comment-weights (grammar/parse-grammar-comments
+
+                          (grammar/parser->grammar ebnf-parser)
+                          :weight)
+        ctx (merge (select-keys opts [:debug :verbose :start
+                                      :namespace :function
+                                      :grammar-updates])
+                   {:weights (merge comment-weights
+                                    (:weights opts))
+                    :weights-res (atom {})})
 
         ;;_ (prn :ctx ctx)
 

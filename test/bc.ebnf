@@ -6,10 +6,10 @@ expression = '(' expression ')'
            | expression "/" nz-number
            | expression "/" expression
            | any-number
-any-number = "0"                 (* weight: 10 *)
+any-number = "0"                 (* {:weight 10} *)
            | nz-number
 nz-number  = nz-digit any-digit*
-any-digit  = "0"                 (* weight: 10 *)
+any-digit  = "0"                 (* {:weight 10} *)
            | nz-digit
 nz-digit   = "1"
            | "2"
