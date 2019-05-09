@@ -8,6 +8,7 @@
 
             [alandipert.kahn :as kahn]
             [instacheck.util :as util]
+            [instacheck.grammar :as grammar]
 
             ;; Used to eval generated code.
             [clojure.test.check.generators :as gen]
@@ -18,24 +19,6 @@
             [clojure.pprint :refer [pprint]]))
 
 (def RULES-PER-FUNC 50)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; General utilities
-
-(defn parser->grammar
-  "Takes a instaparse parser and returns an instacheck grammar: the
-  :grammar value from the parser with a metadata map containing the
-  start rule (:start)."
-  [parser]
-  (with-meta
-    (util/remove-key (:grammar parser) :red)
-    {:start (:start-production parser)}))
-
-(defn load-grammar
-  "Takes an EBNF grammar test string and returns an instacheck
-  grammar (via parser->grammar)."
-  [ebnf]
-  (parser->grammar (instaparse/parser ebnf)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Create test.check generators for sub-trees of an
@@ -256,6 +239,13 @@
 
 ;; Higher level textual generators
 
+(defn- mangle-grammar
+  [ctx grammar]
+  (let [gu (:grammar-updates ctx)]
+    (if (fn? gu)
+      (gu ctx grammar)
+      (apply-grammar-updates grammar gu))))
+
 (defn grammar->generator-defs-source
   "Takes an grammar (loaded using load-grammar) and returns the text
   of a namespace with top-level defines (defs) for all the rules. If
@@ -265,10 +255,7 @@
   rule. Only the start rule flattens the generated values into a final
   string."
   [{:keys [start] :as ctx} grammar]
-  (let [grammar (let [gu (:grammar-updates ctx)]
-                  (if (fn? gu)
-                    (gu ctx grammar)
-                    (apply-grammar-updates grammar gu)))
+  (let [grammar (mangle-grammar ctx grammar)
         ordered-rules (check-and-order-rules grammar)
         start (or start (:start (meta grammar)))]
     (string/join
@@ -289,10 +276,7 @@
   generators (indexed by rule-name keyword)."
   [{:keys [function] :as ctx} grammar]
   (assert function "No function name specified")
-  (let [grammar (let [gu (:grammar-updates ctx)]
-                  (if (fn? gu)
-                    (gu ctx grammar)
-                    (apply-grammar-updates grammar gu)))
+  (let [grammar (mangle-grammar ctx grammar)
         ordered-rules (check-and-order-rules grammar)
         partitioned-rules (map-indexed #(vector %1 %2)
                                        (partition-all RULES-PER-FUNC
@@ -365,26 +349,29 @@
              :cur-start start
              :cur-generator gen))))
 
-(defn ebnf-gen
-  "Takes an path to an EBNF grammar file and return a test.check
-  generator. If the start is specified then this the name of the rule
-  to use as the starting rule of the grmmar. If start is not specified
-  then the first rule in the grammar file is used as the starting
-  rule."
+(defn ebnf->gen
+  "Takes an EBNF grammar, parser, file, or text string and returns
+  a test.check generator. If the start is specified then this the name
+  of the rule to use as the starting rule of the grmmar. If start is
+  not specified then the first rule in the grammar file is used as the
+  starting rule."
   ([ebnf]
-   (ebnf-gen {} ebnf))
+   (ebnf->gen {} ebnf))
 
   ([ctx ebnf]
-   (if (map? ebnf)
-     (grammar->generator-obj ctx ebnf)
-     (grammar->generator-obj ctx (load-grammar ebnf)))))
-
+   (grammar->generator-obj
+     ctx
+     (if (not (map? ebnf))
+       (grammar/load-grammar ebnf)      ;; Text string or file
+       (if (:grammar ebnf)
+         (grammar/parser->grammar ebnf) ;; Parser
+         ebnf)))))                      ;; Assume grammar
 
 
 (comment
-  (println (grammar->generator-function-source {} (load-grammar (slurp "test/recur3.ebnf"))))
+  (println (grammar->generator-function-source {} (grammar/load-grammar (slurp "test/recur3.ebnf"))))
 
-  (def ebnf-generator (ebnf-gen (slurp "test/recur3.ebnf")))
+  (def ebnf-generator (ebnf->gen (slurp "test/recur3.ebnf")))
   (pprint (gen/sample ebnf-generator 10))
 )
 
@@ -404,10 +391,11 @@
 (defn grammar->ns
   [ctx grammar]
   (assert (:namespace ctx) ":namespace required in ctx")
-  (str (clj-prefix (:namespace ctx)) (grammar->generator-defs-source ctx grammar)))
+  (str (clj-prefix (:namespace ctx))
+       (grammar->generator-defs-source ctx grammar)))
 
 (comment
-  (def ebnf-grammar (load-grammar (slurp "test/recur1.ebnf")))
+  (def ebnf-grammar (grammar/load-grammar (slurp "test/recur1.ebnf")))
   (spit "joel/gen.clj" (grammar->ns {:namespace "joel.gen"}
                                     ebnf-grammar))
 )
@@ -451,7 +439,7 @@
   to the number of times that path in the grammar was followed/used
   across all the texts from text-objs."
   [parser text-objs]
-  (let [grammar (parser->grammar parser)
+  (let [grammar (grammar/parser->grammar parser)
 	;; Get the full set of zero'd out weights by
 	;; calling the def generator but throwing away the
 	;; result. The weights are in the context atom.

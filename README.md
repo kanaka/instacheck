@@ -25,23 +25,23 @@ Add the following to your Clojure dependencies:
 Here is an example of using instacheck with instaparse and test.check:
 
 ```clojure
-(require '[instacheck.core :as ic])
-(require '[instaparse.core :as ip])
+(require '[instacheck.core :as instacheck])
+(require '[instaparse.core :as instaparse])
 (require '[clojure.test.check :as tc])
 (require '[clojure.test.check.generators :as tc-gen])
 (require '[clojure.test.check.properties :as tc-prop])
 
 ;; parser is a regular instaparse parser
-(def parser (ip/parser "root = ('foo' #'[0-9]' ) 'bar' *"))
+(def parser (instaparse/parser "root = ('foo' #'[0-9]' ) 'bar' *"))
 
 ;; gen is a regular test.check generator based on the parser
-(def gen (ic/ebnf-gen {} (ic/parser->grammar parser)))
+(def gen (instacheck/ebnf->gen {} parser))
 
 ;; Generate some samples
 (tc-gen/sample gen)
 
 ;; A test.check input property with gen
-(def prop (tc-prop/for-all [gen] #(< (count %) 5)))
+(def prop (tc-prop/for-all* [gen] #(< (count %) 5)))
 ;; Run quick-check for 10 iterations on prop
 (tc/quick-check 10 prop)
 ```
@@ -50,10 +50,10 @@ Here is an example of using some convenience functions provided by
 instacheck that encapsulate instaparse and test.check functionality:
 
 ```clojure
-(require '[instacheck.core :refer [load-grammar ebnf-gen run-check]])
+(require '[instacheck.core :refer [ebnf->gen run-check]])
 
 (defn checkit [grammar opts]
-  (let [gen (ebnf-gen {} (load-grammar grammar))
+  (let [gen (ebnf->gen {} grammar)
         check-fn #(do (prn :sample %) (< (count %) 5))
         report-fn #(prn :report %)]
     (run-check opts gen check-fn report-fn)))

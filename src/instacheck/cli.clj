@@ -11,6 +11,8 @@
             [instaparse.core :as instaparse]
 
             [instacheck.core :as instacheck]
+            [instacheck.grammar :as grammar]
+            [instacheck.util :as util]
 
             ;; Used in the generated code. Useful to have loaded here
             ;; for REPL debugging.
@@ -163,7 +165,7 @@
   [ctx parser clj-ns function]
   (when (not clj-ns)
     (usage ["clj mode requires namespace"]))
-  (let [grammar (instacheck/parser->grammar parser)
+  (let [grammar (grammar/parser->grammar parser)
         gen-src (if function
                   instacheck/grammar->generator-func-source
                   instacheck/grammar->generator-defs-source)]
@@ -176,8 +178,8 @@
   [ctx parser dir number]
   (when (not dir)
     (usage ["samples mode requires SAMPLE_DIR"]))
-  (let [grammar (instacheck/parser->grammar parser)
-        samples (gen/sample (instacheck/ebnf-gen ctx grammar) number)]
+  (let [genfn (instacheck/ebnf->gen ctx parser)
+        samples (gen/sample genfn number)]
     (output-samples ctx dir samples)))
 
 (defn do-parse
@@ -211,8 +213,7 @@
                       (str (io/file dir (format "%04d" run)))
                       dir)
             res-file (io/file run-dir "result.edn")
-            grammar (instacheck/parser->grammar parser)
-            generator (instacheck/ebnf-gen ctx grammar)
+            generator (instacheck/ebnf->gen ctx parser)
             qc-res (check-and-report ctx generator run-dir cmd opts)]
         (save-weights ctx (io/file run-dir "weights.edn"))
         (pr-err "Saving result map to" (str res-file))
