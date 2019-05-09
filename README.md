@@ -1,23 +1,25 @@
-# Instacheck
+# Instacheck 0.4.1
 
-**Instaparse meets test.check: property-based testing with inputs defined as EBNF grammars**
+*Instaparse meets test.check: property-based testing with inputs defined as EBNF grammars*
 
-## Prerequisites:
+If the test inputs for your program are defined by `input.ebnf` then
+you can use property-base testing to test your program like this:
 
-* Build/install patched instaparse that retains comment data and does
-  grammar traversal logging:
-```bash
-git clone git@github.com:kanaka/instaparse.git
-cd instaparse
-lein install
 ```
+lein run check input.ebnf sample-dir/ -- ./prog %
+```
+
+This will run `./prog` with larger and larger sample files (stored in
+`sample-dir`) until the program fails. Then it will run `./prog` with
+smaller and smaller versions of the failure case until it finds the
+smallest version that still fails.
 
 ## Library Usage
 
 Add the following to your Clojure dependencies:
 
 ```clojure
-[instacheck "0.4.0"]
+[kanaka/instacheck "0.4.1"]
 ```
 
 Require instacheck and use it to generate test cases based on a
