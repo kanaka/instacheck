@@ -14,7 +14,7 @@ This will run `./prog` with larger and larger sample files (stored in
 smaller and smaller versions of the failure case until it finds the
 smallest version that still fails.
 
-## Library Usage
+## Library / REPL Usage
 
 Add the following to your Clojure dependencies:
 
@@ -22,19 +22,43 @@ Add the following to your Clojure dependencies:
 [kanaka/instacheck "0.4.1"]
 ```
 
-Require instacheck and use it to generate test cases based on a
-grammar and check those test cases with a check-fn:
+Here is an example of using instacheck with instaparse and test.check:
 
 ```clojure
-(ns example.core
-  (:require [instacheck.core :as instacheck]))
+(require '[instacheck.core :as ic])
+(require '[instaparse.core :as ip])
+(require '[clojure.test.check :as tc])
+(require '[clojure.test.check.generators :as tc-gen])
+(require '[clojure.test.check.properties :as tc-prop])
 
-(let [grammar "root = ('foo' #'[0-9]' ) 'bar' *"
-      grammar-obj (instacheck/load-grammar grammar)
-      generator (instacheck/ebnf-gen {} grammar-obj)
-      check-fn #(do (prn :sample %) (< (count %) 5))
-      report-fn #(prn :report %)]
-  (instacheck/run-check {:iterations 5} generator check-fn report-fn))
+;; parser is a regular instaparse parser
+(def parser (ip/parser "root = ('foo' #'[0-9]' ) 'bar' *"))
+
+;; gen is a regular test.check generator based on the parser
+(def gen (ic/ebnf-gen {} (ic/parser->grammar parser)))
+
+;; Generate some samples
+(tc-gen/sample gen)
+
+;; A test.check input property with gen
+(def prop (tc-prop/for-all [gen] #(< (count %) 5)))
+;; Run quick-check for 10 iterations on prop
+(tc/quick-check 10 prop)
+```
+
+Here is an example of using some convenience functions provided by
+instacheck that encapsulate instaparse and test.check functionality:
+
+```clojure
+(require '[instacheck.core :refer [load-grammar ebnf-gen run-check]])
+
+(defn checkit [grammar opts]
+  (let [gen (ebnf-gen {} (load-grammar grammar))
+        check-fn #(do (prn :sample %) (< (count %) 5))
+        report-fn #(prn :report %)]
+    (run-check opts gen check-fn report-fn)))
+
+(checkit "root = ('foo' #'[0-9]' ) 'bar' *" {:iterations 5})
 ```
 
 
