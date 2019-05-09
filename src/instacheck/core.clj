@@ -32,6 +32,8 @@
     {:start (:start-production parser)}))
 
 (defn load-grammar
+  "Takes an EBNF grammar test string and returns an instacheck
+  grammar (via parser->grammar)."
   [ebnf]
   (parser->grammar (instaparse/parser ebnf)))
 
@@ -327,6 +329,8 @@
 ;; Generator object/API
 
 (defn grammar->generator-obj
+  "Return a a new generator object based on the context and instacheck
+  grammar object."
   [{:keys [start] :as ctx} grammar]
   (let [ctx (assoc ctx :function "ephemeral")
         fn-src (grammar->generator-func-source ctx grammar)
@@ -411,11 +415,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test execution and parsing utilties
 
-(defn run-check [opts gen-to-check check-fn report-fn]
+(defn run-check
   "Run quick-check against a generator (gen-to-check) using a check
   function (check-fn) and reporter functon (report-fn). Execution
   options (opts) supported are :iterations (default: 10), :max-size
   (default: 200), and :seed."
+  [opts gen-to-check check-fn report-fn]
   (let [{:keys [iterations seed max-size]
 	 :or {iterations 10
 	      ;;seed 1
