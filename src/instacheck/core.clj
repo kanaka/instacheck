@@ -69,6 +69,31 @@
                         (gen-ROUTE ctx t (+ 2 indent)) "]")))))
            "])"))))
 
+(defn- gen-ord
+  "One of the values must occur. Like gen-alt with a preference for
+  earlier values."
+  [{:keys [weights-res weights weights-lookup? path] :as ctx} tree indent]
+  (let [pre (apply str (repeat indent "  "))]
+    (str pre "(igen/freq [\n"
+         (string/join
+           "\n"
+           (for [[idx adj t] [[0 1 (-> tree :parser1) ] [1 0 (-> tree :parser2)]]
+                 :let [path (conj (:path ctx) idx)
+                       ctx (assoc ctx :path path)
+                       pw (get weights path)
+                       weight (+ adj (if pw pw 100))  ;; Preference for parser1
+                       wcomment (when pw
+                                  "    ;; ** adjusted by config ***")]]
+             (do
+               (when weights-res
+                 (swap! weights-res assoc path weight))
+               (if weights-lookup?
+                 (str pre "  [(get weights " path " " weight ")" wcomment "\n"
+                      (gen-ROUTE ctx t (+ 2 indent)) "]")
+                 (str pre "  [" weight wcomment "\n"
+                      (gen-ROUTE ctx t (+ 2 indent)) "]")))))
+         "])")))
+
 (defn- gen-regexp
   "Value must match regexp. For common space value \\s* and \\s+
   generate zero and 1 space respectively."
@@ -136,6 +161,7 @@
 (def tag-to-gen
   {:cat     gen-cat
    :alt     gen-alt
+   :ord     gen-ord
    :regexp  gen-regexp
    :string  gen-string
    :star    gen-star
