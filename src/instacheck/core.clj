@@ -12,6 +12,11 @@
             ;; Convenient to have already loaded for testing
             [clojure.pprint :refer [pprint]]))
 
+;; Make some grammar definitions available from core
+(def filter-alts i-grammar/filter-alts)
+(def parse-grammar-comments i-grammar/parse-grammar-comments)
+(def apply-grammar-updates i-codegen/apply-grammar-updates)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generator object/API
 
@@ -164,10 +169,6 @@
       res)))
 
 ;;;;;
-
-;; Make some grammar definitions available from core
-(def filter-alts i-grammar/filter-alts)
-(def parse-grammar-comments i-grammar/parse-grammar-comments)
 
 (defn parse-weights
   "Use parser to parse a sequence of text description objects {:text
