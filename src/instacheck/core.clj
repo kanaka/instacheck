@@ -12,10 +12,14 @@
             ;; Convenient to have already loaded for testing
             [clojure.pprint :refer [pprint]]))
 
-;; Make some grammar definitions available from core
+;; Make some common definitions available from core
+(def load-grammar i-grammar/load-grammar)
 (def filter-alts i-grammar/filter-alts)
 (def parse-grammar-comments i-grammar/parse-grammar-comments)
+
 (def apply-grammar-updates i-codegen/apply-grammar-updates)
+(def grammar->generator-func-source i-codegen/grammar->generator-func-source)
+(def grammar->generator-defs-source i-codegen/grammar->generator-defs-source)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generator object/API
@@ -168,31 +172,9 @@
                        :location location}))
       res)))
 
-;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Misc
 
-(defn parse-weights
-  "Use parser to parse a sequence of text description objects {:text
-  text :location location}. Returns a weights map with the weights set
-  to the number of times that path in the grammar was followed/used
-  across all the texts from text-objs."
-  [parser text-objs]
-  (let [grammar (i-grammar/parser->grammar parser)
-	;; Get the full set of zero'd out weights by
-	;; calling the def generator but throwing away the
-	;; result. The weights are in the context atom.
-        ctx {:weights-res (atom {})}
-        _ (i-codegen/grammar->generator-defs-source ctx grammar)
-        zero-weights (into {} (for [[k v] @(:weights-res ctx)] [k 0]))
-        ;; Parse each text string
-        results (for [{:keys [text location]} text-objs]
-                  (parse parser text location))]
-    (merge zero-weights
-           (frequencies
-             (mapcat #(-> % meta :path-log) results)))))
-
-(defn parse-weights-from-files
-  "Wrapper around parse-weights that marshals the text objects from
-  a list of file paths."
-  [parser files]
-  (parse-weights parser (for [f files] {:text (slurp f) :location f})))
+(defn save-weights [path weights]
+    (spit path (with-out-str (pprint (into (sorted-map) weights)))))
 

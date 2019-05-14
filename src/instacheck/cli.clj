@@ -10,77 +10,10 @@
 
             [instaparse.core :as instaparse]
 
-            [instacheck.core :as instacheck]
-            [instacheck.grammar :as i-grammar]
-            [instacheck.codegen :as i-codegen]
+            [instacheck.core :as core]
+            [instacheck.grammar :as grammar]
+            [instacheck.codegen :as codegen]
             [instacheck.util :refer [pr-err]]))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Command line utilities
-
-(defn sample-path
-  [dir suffix]
-  (str (io/file dir (if (number? suffix)
-                      (format "sample-%04d" suffix)
-                      (format "sample-%s" suffix)))))
-
-(defn output-samples
-  [ctx dir samples]
-  (printf "Saving samples to %s - %s\n"
-          (sample-path dir 0) (sample-path dir (count samples)))
-  (io/make-parents (sample-path dir 0))
-  (doseq [[idx sample] (map-indexed vector samples)]
-    (let [f (io/file (sample-path dir idx))]
-      (spit f sample))))
-
-(defn run-test
-  [ctx raw-cmd sample-path sample]
-  (let [sfile (clojure.java.io/as-file sample-path)
-        swriter (io/writer sfile)
-        cmd (if (seq (keep #(re-find #"%" %) raw-cmd))
-              (map #(string/replace % #"%" sample-path) raw-cmd)
-              (conj raw-cmd sample-path))
-        res (do
-              (println "Running:" (string/join " " cmd))
-              (.write swriter sample)
-              (.flush swriter)
-              (apply sh cmd))]
-    (when (:verbose ctx)
-      (when (:out res) (print "Out:" (:out res)))
-      (when (:err res) (print "Err:" (:err res))))
-    (println "Result:"
-             (if (= 0 (:exit res))
-               "Pass"
-               (str "Fail (exit code " (:exit res) ")")))
-    (zero? (:exit res))))
-
-(defn check-and-report
-  [ctx generator dir cmd opts]
-  (io/make-parents (sample-path dir 0))
-  (let [cur-state (atom nil)
-        cur-idx (atom 0)
-        check-fn (fn [sample]
-                   (run-test ctx
-                             cmd
-                             (sample-path dir (swap! cur-idx inc))
-                             sample))
-        report-fn (fn [r]
-                    (when (:verbose ctx)
-                      (prn :report (update-in
-                                     (dissoc r :property)
-                                     [:current-smallest] dissoc :function)))
-                    (when (not (= @cur-state (:type r)))
-                      (reset! cur-state (:type r))
-                      (pr-err (str "NEW STATE: " (name (:type r))))))
-        res (instacheck/run-check opts generator check-fn report-fn)]
-    res))
-
-(defn save-weights [ctx file]
-  (when file
-    (pr-err "Saving weights to" (str file))
-    (spit file (with-out-str (pprint (into (sorted-map)
-                                           @(:weights-res ctx)))))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Command line usage of ebnf
@@ -150,26 +83,83 @@
   (pr-err cli-summary)
   (System/exit 2))
 
+
+;; Command line utilities
+
+(defn sample-path
+  [dir suffix]
+  (str (io/file dir (if (number? suffix)
+                      (format "sample-%04d" suffix)
+                      (format "sample-%s" suffix)))))
+
+(defn- save-weights [ctx file]
+  (when file
+    (pr-err "Saving weights to" (str file))
+    (spit file (with-out-str (pprint (into (sorted-map)
+                                           @(:weights-res ctx)))))))
+
+
+;; do-clj
+
 (defn do-clj
   [ctx parser clj-ns function]
   (when (not clj-ns)
     (usage ["clj mode requires namespace"]))
-  (let [grammar (i-grammar/parser->grammar parser)
+  (let [grammar (grammar/parser->grammar parser)
         gen-src (if function
-                  i-codegen/grammar->generator-func-source
-                  i-codegen/grammar->generator-defs-source)]
+                  codegen/grammar->generator-func-source
+                  codegen/grammar->generator-defs-source)]
 
     (println
-      (str (instacheck/clj-prefix clj-ns)
+      (str (core/clj-prefix clj-ns)
            (gen-src ctx grammar)))))
+
+;; do-samples
+
+(defn output-samples
+  [ctx dir samples]
+  (printf "Saving samples to %s - %s\n"
+          (sample-path dir 0) (sample-path dir (count samples)))
+  (io/make-parents (sample-path dir 0))
+  (doseq [[idx sample] (map-indexed vector samples)]
+    (let [f (io/file (sample-path dir idx))]
+      (spit f sample))))
 
 (defn do-samples
   [ctx parser dir number]
   (when (not dir)
     (usage ["samples mode requires SAMPLE_DIR"]))
-  (let [genfn (instacheck/ebnf->gen ctx parser)
+  (let [genfn (core/ebnf->gen ctx parser)
         samples (gen/sample genfn number)]
     (output-samples ctx dir samples)))
+
+;; do-parse
+
+(defn parse-weights
+  "Use parser to parse a sequence of text description objects {:text
+  text :location location}. Returns a weights map with the weights set
+  to the number of times that path in the grammar was followed/used
+  across all the texts from text-objs."
+  [parser text-objs]
+  (let [grammar (grammar/parser->grammar parser)
+	;; Get the full set of zero'd out weights by
+	;; calling the def generator but throwing away the
+	;; result. The weights are in the context atom.
+        ctx {:weights-res (atom {})}
+        _ (codegen/grammar->generator-defs-source ctx grammar)
+        zero-weights (into {} (for [[k v] @(:weights-res ctx)] [k 0]))
+        ;; Parse each text string
+        results (for [{:keys [text location]} text-objs]
+                  (core/parse parser text location))]
+    (merge zero-weights
+           (frequencies
+             (mapcat #(-> % meta :path-log) results)))))
+
+(defn parse-weights-from-files
+  "Wrapper around parse-weights that marshals the text objects from
+  a list of file paths."
+  [parser files]
+  (parse-weights parser (for [f files] {:text (slurp f) :location f})))
 
 (defn do-parse
   [ctx parser files]
@@ -177,7 +167,7 @@
     (usage ["parse mode requires FILE list"]))
   (let [weights
         (try
-          (instacheck/parse-weights-from-files parser files)
+          (parse-weights-from-files parser files)
           (catch Exception e
             (let [{:keys [text failure location]} (ex-data e)]
               (println (str "Parse error in '" location "':"))
@@ -185,6 +175,50 @@
               (System/exit 1))))]
     ;; Update the ctx result weights
     (reset! (:weights-res ctx) weights)))
+
+;; do-check
+
+(defn run-test
+  [ctx raw-cmd sample-path sample]
+  (let [sfile (clojure.java.io/as-file sample-path)
+        swriter (io/writer sfile)
+        cmd (if (seq (keep #(re-find #"%" %) raw-cmd))
+              (map #(string/replace % #"%" sample-path) raw-cmd)
+              (conj raw-cmd sample-path))
+        res (do
+              (println "Running:" (string/join " " cmd))
+              (.write swriter sample)
+              (.flush swriter)
+              (apply sh cmd))]
+    (when (:verbose ctx)
+      (when (:out res) (print "Out:" (:out res)))
+      (when (:err res) (print "Err:" (:err res))))
+    (println "Result:"
+             (if (= 0 (:exit res))
+               "Pass"
+               (str "Fail (exit code " (:exit res) ")")))
+    (zero? (:exit res))))
+
+(defn check-and-report
+  [ctx generator dir cmd opts]
+  (io/make-parents (sample-path dir 0))
+  (let [cur-state (atom nil)
+        cur-idx (atom 0)
+        check-fn (fn [sample]
+                   (run-test ctx
+                             cmd
+                             (sample-path dir (swap! cur-idx inc))
+                             sample))
+        report-fn (fn [r]
+                    (when (:verbose ctx)
+                      (prn :report (update-in
+                                     (dissoc r :property)
+                                     [:current-smallest] dissoc :function)))
+                    (when (not (= @cur-state (:type r)))
+                      (reset! cur-state (:type r))
+                      (pr-err (str "NEW STATE: " (name (:type r))))))
+        res (core/run-check opts generator check-fn report-fn)]
+    res))
 
 (defn do-check
   [ctx parser dir cmd opts]
@@ -202,7 +236,7 @@
                       (str (io/file dir (format "%04d" run)))
                       dir)
             res-file (io/file run-dir "result.edn")
-            generator (instacheck/ebnf->gen ctx parser)
+            generator (core/ebnf->gen ctx parser)
             qc-res (check-and-report ctx generator run-dir cmd opts)]
         (save-weights ctx (io/file run-dir "weights.edn"))
         (pr-err "Saving result map to" (str res-file))
@@ -233,8 +267,8 @@
         _ (when (:verbose opts) (pr-err "Loading parser from" ebnf))
         ebnf-parser (instaparse/parser (slurp ebnf))
         _ (when (:verbose opts) (pr-err "Extracting comment weights"))
-        comment-weights (i-grammar/parse-grammar-comments
-                          (i-grammar/parser->grammar ebnf-parser)
+        comment-weights (grammar/parse-grammar-comments
+                          (grammar/parser->grammar ebnf-parser)
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start
                                       :namespace :function

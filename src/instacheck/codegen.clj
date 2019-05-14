@@ -59,7 +59,7 @@
                  (when weights-res
                    (swap! weights-res assoc path weight))
                  (if weights-lookup?
-                   (str pre "  [(get weights " path " " weight ")" wcomment "\n"
+                   (str pre "  [(get w " path " " weight ")" wcomment "\n"
                         (gen-ROUTE ctx t (+ 2 indent)) "]")
                    (str pre "  [" weight wcomment "\n"
                         (gen-ROUTE ctx t (+ 2 indent)) "]")))))
@@ -84,7 +84,7 @@
                (when weights-res
                  (swap! weights-res assoc path weight))
                (if weights-lookup?
-                 (str pre "  [(get weights " path " " weight ")" wcomment "\n"
+                 (str pre "  [(get w " path " " weight ")" wcomment "\n"
                       (gen-ROUTE ctx t (+ 2 indent)) "]")
                  (str pre "  [" weight wcomment "\n"
                       (gen-ROUTE ctx t (+ 2 indent)) "]")))))
@@ -309,31 +309,33 @@
                                                       ordered-rules))
         ctx (assoc ctx
                    :weights-lookup? true
-                   :gen-dict "gmap")]
+                   :gen-dict "g")]
     (str
       (string/join
         "\n\n"
         (for [[idx rules] partitioned-rules]
           (str
             "(defn- " function "-part-" idx " [gmap weights]\n"
-            "  (let [\n"
+            "  (let [g gmap\n"
+            "        w weights\n\n"
             (string/join
               "\n\n"
               (for [k rules
                     :let [v (get grammar k)]]
                 (str "        gen-" (name k) "\n"
                      (gen-rule-body ctx k v 4) "\n"
-                     "        gmap (assoc gmap " k " gen-" (name k) ")"))) "]\n"
-            "    gmap))")))
+                     "        g (assoc g " k " gen-" (name k) ")"))) "]\n"
+            "    g))")))
       (str
         "\n\n"
         "(defn " function " [& [gmap weights]]\n"
-        "  (let [gmap (or gmap {})\n"
+        "  (let [g (or gmap {})\n"
+        "        w weights\n\n"
         (string/join
           "\n"
           (for [[idx _] partitioned-rules]
-            (str "        gmap (" function "-part-" idx " gmap weights)"))) "]\n"
-        "    gmap))"))))
+            (str "        g (" function "-part-" idx " g weights)"))) "]\n"
+        "    g))"))))
 
 (defn eval-generator-source
   [src]
