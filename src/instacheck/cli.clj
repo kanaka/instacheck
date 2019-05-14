@@ -11,12 +11,9 @@
             [instaparse.core :as instaparse]
 
             [instacheck.core :as instacheck]
-            [instacheck.grammar :as grammar]
-            [instacheck.util :refer [pr-err]]
-
-            ;; Used in the generated code. Useful to have loaded here
-            ;; for REPL debugging.
-            [com.gfredericks.test.chuck.generators :as chuck]))
+            [instacheck.grammar :as i-grammar]
+            [instacheck.codegen :as i-codegen]
+            [instacheck.util :refer [pr-err]]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Command line utilities
@@ -157,10 +154,10 @@
   [ctx parser clj-ns function]
   (when (not clj-ns)
     (usage ["clj mode requires namespace"]))
-  (let [grammar (grammar/parser->grammar parser)
+  (let [grammar (i-grammar/parser->grammar parser)
         gen-src (if function
-                  instacheck/grammar->generator-func-source
-                  instacheck/grammar->generator-defs-source)]
+                  i-codegen/grammar->generator-func-source
+                  i-codegen/grammar->generator-defs-source)]
 
     (println
       (str (instacheck/clj-prefix clj-ns)
@@ -236,8 +233,8 @@
         _ (when (:verbose opts) (pr-err "Loading parser from" ebnf))
         ebnf-parser (instaparse/parser (slurp ebnf))
         _ (when (:verbose opts) (pr-err "Extracting comment weights"))
-        comment-weights (grammar/parse-grammar-comments
-                          (grammar/parser->grammar ebnf-parser)
+        comment-weights (i-grammar/parse-grammar-comments
+                          (i-grammar/parser->grammar ebnf-parser)
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start
                                       :namespace :function

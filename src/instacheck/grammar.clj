@@ -53,3 +53,15 @@
                              [k (tx (into {} (map read-string c)))])))
                        path-nodes)]
     (into {} path-vals)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; weight utilities
+
+(defn filter-alts
+  "Remove paths for weights that are not alternations (or ordered
+  alternations). Only alternations (igen/freq) are currently
+  affected by the weights so remove everything else."
+  [weights]
+  (into {} (filter #(-> % key reverse second #{:alt :ord}) weights)))
+
