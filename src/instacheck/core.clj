@@ -214,6 +214,7 @@
   "Takes a rule name, rule grammar and indent level and returns the
   text of a generator for the rule body."
   [ctx k v indent]
+  (when (:verbose ctx) (util/pr-err "Generating rule body for:" k))
   (let [pre (apply str (repeat indent "  "))
         ctx (assoc ctx :cur-nt k :path [k])]
     (if (util/tree-matches #(= k %) v)
@@ -256,6 +257,8 @@
   string."
   [{:keys [start] :as ctx} grammar]
   (let [grammar (mangle-grammar ctx grammar)
+        _ (when (:verbose ctx)
+            (util/pr-err "Ordering rules and checking for mutual recursion"))
         ordered-rules (check-and-order-rules grammar)
         start (or start (:start (meta grammar)))]
     (string/join
@@ -277,6 +280,8 @@
   [{:keys [function] :as ctx} grammar]
   (assert function "No function name specified")
   (let [grammar (mangle-grammar ctx grammar)
+        _ (when (:verbose ctx)
+            (util/pr-err "Ordering rules and checking for mutual recursion"))
         ordered-rules (check-and-order-rules grammar)
         partitioned-rules (map-indexed #(vector %1 %2)
                                        (partition-all RULES-PER-FUNC

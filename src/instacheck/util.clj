@@ -1,7 +1,15 @@
 (ns instacheck.util
   (:require [clojure.set :refer [union]]
-            [clojure.walk :refer [postwalk]]))
+            [clojure.walk :refer [postwalk]]
+            [clojure.string :as string]))
 
+(defn pr-err
+  [& args]
+  (binding [*out* *err*]
+    (apply println args)
+    (flush)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn tree-matches
   "Return seq of pred? matches for any node in the tree."
@@ -62,7 +70,7 @@
   a single string (optionally separated by sep). Empty values are
   removed."
   [tree & [sep]]
-  (clojure.string/replace
+  (string/replace
     (apply str (if sep
                  (interpose sep (flatten-text* tree))
                  (flatten-text* tree)))

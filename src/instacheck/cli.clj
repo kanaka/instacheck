@@ -12,19 +12,11 @@
 
             [instacheck.core :as instacheck]
             [instacheck.grammar :as grammar]
-            [instacheck.util :as util]
+            [instacheck.util :refer [pr-err]]
 
             ;; Used in the generated code. Useful to have loaded here
             ;; for REPL debugging.
             [com.gfredericks.test.chuck.generators :as chuck]))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defn pr-err
-  [& args]
-  (binding [*out* *err*]
-    (apply println args)
-    (flush)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Command line utilities
@@ -241,9 +233,10 @@
         _ (when (not ebnf) (usage ["EBNF-FILE required"]))
         opts (into {} (filter (comp not nil? second)
                               (:options cmd-opts)))
+        _ (when (:verbose opts) (pr-err "Loading parser from" ebnf))
         ebnf-parser (instaparse/parser (slurp ebnf))
+        _ (when (:verbose opts) (pr-err "Extracting comment weights"))
         comment-weights (grammar/parse-grammar-comments
-
                           (grammar/parser->grammar ebnf-parser)
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start
