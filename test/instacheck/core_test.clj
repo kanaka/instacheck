@@ -37,12 +37,16 @@ r1 = ( '<' ( r2 | r3 ) '>' )+ | '<' r1 '>'
 r2 = '0' | ( #'[1-9]' r2 )
 r3 = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 
+(def ebnf6 "
+r1 = 'a' / '<' r1 '>'")
+
 
 (def g1 (g/load-grammar ebnf1))
 (def g2 (g/load-grammar ebnf2))
 (def g3 (g/load-grammar ebnf3))
 (def g4 (g/load-grammar ebnf4))
 (def g5 (g/load-grammar ebnf5))
+(def g6 (g/load-grammar ebnf6))
 
 (deftest ebnf->gen-test
   (testing "ebnf->gen"
@@ -92,7 +96,27 @@ r3 = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
       (let [wa4 (g/grammar->weights g4)
             gen4 (core/ebnf->gen {:weights wa4} g4)
             samps (take 100 (gen/sample-seq gen4))]
-        (is (every? #(= "d" %) samps))))))
+        (is (every? #(= "d" %) samps))))
+
+    (testing "non-zero on a single path of an :alt"
+      (let [wa4 (g/grammar->weights g4)
+            gen4 (core/ebnf->gen {:weights wa4} g4)
+            samps (take 100 (gen/sample-seq gen4))]
+        (is (every? #(= "d" %) samps))))
+
+    (testing "self-recursion"
+      (let [wa5 (g/grammar->weights g5)
+            gen5 (core/ebnf->gen {:weights wa5} g5)
+            samps (take 100 (gen/sample-seq gen5))]
+        (is (= 100 (count samps))
+            (every? #(re-seq #"<*.*>*" %) samps))))
+
+    (testing "self-recursion containing :ord"
+      (let [wa6 (g/grammar->weights g6)
+            gen6 (core/ebnf->gen {:weights wa6} g6)
+            samps (take 100 (gen/sample-seq gen6))]
+        (is (= 100 (count samps))
+            (every? #(re-seq #"<*a>*" %) samps))))))
 
 (deftest grammar->ns-test
   (testing "gramar->ns"

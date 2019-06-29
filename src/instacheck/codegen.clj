@@ -232,7 +232,7 @@
   "Prune a grammar rule of the recursive parts. Identify the smallest
   optional branches of the rule which are recursive and prune/remove
   them."
-  [k tree]
+  [tree k]
   (let [parent? (fn [t] (util/tree-matches
                           #(= % {:tag :nt :keyword k}) t))]
     (walk/postwalk
@@ -240,9 +240,20 @@
         (if (and (map? node) (parent? node))
           ;; Prune/rewrite the matches sub-trees
           (condp = (:tag node)
-            :alt  {:tag :alt
-                   :parsers (filter #(not (parent? %))
-                                    (:parsers node))}
+            :alt  (let [ps (filter #(not (parent? %))
+                                   (:parsers node))]
+                    (if (seq ps)
+                      {:tag :alt
+                       :parsers ps}
+                      {:tag :epsilon}))
+            :ord  (let [p1 (:parser1 node)
+                        p1? (parent? p1)
+                        p2 (:parser2 node)
+                        p2? (parent? p2)]
+                    (cond
+                      (and p1? p2?) {:tag :epsilon}
+                      p1?           p2
+                      p2?           p1))
             :star {:tag :epsilon}
             :opt  {:tag :epsilon}
             node)
@@ -258,7 +269,7 @@
   used for the recursive generator to recursive-gen."
   [grammar]
   (into {} (for [[k rule] grammar]
-             [k (prune-rule-recursion k rule)])))
+             [k (prune-rule-recursion rule k)])))
 
 ;;;;;;
 
@@ -273,7 +284,7 @@
       (str pre "(gen/recursive-gen\n"
            pre "  (fn [inner]\n"
            (gen-ROUTE ctx v (+ 2 indent)) ")\n"
-           (gen-ROUTE ctx (prune-rule-recursion k v) (+ 1 indent)) ")")
+           (gen-ROUTE ctx (prune-rule-recursion v k) (+ 1 indent)) ")")
       (str (gen-ROUTE ctx v indent)))))
 
 (defn check-and-order-rules
