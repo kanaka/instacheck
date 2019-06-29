@@ -39,20 +39,6 @@
   (postwalk #(if (and (vector? %) (= k (first %))) nil %) tree))
 
 
-(comment
-
-(def ttree {:a [1 2 [:b] {:foo [:c :c]}]
-            :b {:bar {:baz [:qux :c]}}
-            :c {:foo {:bar [:baz :qux []]}}})
-
-(tree-matches #(= :c %) (:a ttree))
-;=>(:c :c)
-
-(tree-deps ttree)
-;=>{:a #{:b :c} :b #{:c} :c #{}}
-
-)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn flatten-text*
@@ -67,24 +53,11 @@
 
 (defn flatten-text
   "Take a tree (sequences hierarchy) and flattens it all the way to
-  a single string (optionally separated by sep). Empty values are
-  removed."
+  a single string (optionally separated by sep). Empty values (but not
+  blank strings) are removed."
   [tree & [sep]]
   (string/replace
     (apply str (if sep
                  (interpose sep (flatten-text* tree))
                  (flatten-text* tree)))
     #" +" " "))
-
-(comment
-
-(flatten-text ["foo" "" [[nil "bar"] "baz" ["qux"]]])
-;=>"foobarbazqux"
-
-(flatten-text [" "])
-;=>"foobar bazqux"
-
-(flatten-text ["foo" "" [[nil "bar"] "baz" ["qux"]]] " ")
-;=>"foo bar baz qux"
-
-)

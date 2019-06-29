@@ -14,6 +14,8 @@
             ;; Convenient to have already loaded for testing
             [clojure.pprint :refer [pprint]]))
 
+;; Instacheck Clojure code generation
+
 (def RULES-PER-FUNC 50)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -73,7 +75,8 @@
     (str pre "(igen/freq [\n"
          (string/join
            "\n"
-           (for [[idx adj t] [[0 1 (-> tree :parser1) ] [1 0 (-> tree :parser2)]]
+           (for [[idx adj t] [[0 1 (-> tree :parser1) ]
+                              [1 0 (-> tree :parser2)]]
                  :let [path (conj (:path ctx) idx)
                        ctx (assoc ctx :path path)
                        pw (get weights path)
@@ -89,6 +92,64 @@
                  (str pre "  [" weight wcomment "\n"
                       (gen-ROUTE ctx t (+ 2 indent)) "]")))))
          "])")))
+
+(defn- gen-star
+  "The value occurs 0 or 1 times."
+  [{:keys [weights-res weights weights-lookup? path] :as ctx} tree indent]
+  (let [pre (apply str (repeat indent "  "))]
+    (str pre "(igen/freq [\n"
+         (string/join
+           "\n"
+           (for [[idx t] [[nil {:tag :epsilon}]
+                          [0 {:tag :plus, :parser (-> tree :parser)}]]
+                 :let [path (conj (:path ctx) idx)
+                       ctx (assoc ctx :path path)
+                       pw (get weights path)
+                       weight (if pw pw 100)
+                       wcomment (when pw
+                                  "    ;; ** adjusted by config ***")]]
+             (do
+               (when weights-res
+                 (swap! weights-res assoc path weight))
+               (if weights-lookup?
+                 (str pre "  [(get w " path " " weight ")" wcomment "\n"
+                      (gen-ROUTE ctx t (+ 2 indent)) "]")
+                 (str pre "  [" weight wcomment "\n"
+                      (gen-ROUTE ctx t (+ 2 indent)) "]")))))
+         "])")))
+
+(defn- gen-opt
+  "The value occurs 0 or 1 times."
+  [{:keys [weights-res weights weights-lookup? path] :as ctx} tree indent]
+  (let [pre (apply str (repeat indent "  "))]
+    (str pre "(igen/freq [\n"
+         (string/join
+           "\n"
+           (for [[idx t] [[nil {:tag :epsilon}]
+                          [0 (-> tree :parser)]]
+                 :let [path (conj (:path ctx) idx)
+                       ctx (assoc ctx :path path)
+                       pw (get weights path)
+                       weight (if pw pw 100)
+                       wcomment (when pw
+                                  "    ;; ** adjusted by config ***")]]
+             (do
+               (when weights-res
+                 (swap! weights-res assoc path weight))
+               (if weights-lookup?
+                 (str pre "  [(get w " path " " weight ")" wcomment "\n"
+                      (gen-ROUTE ctx t (+ 2 indent)) "]")
+                 (str pre "  [" weight wcomment "\n"
+                      (gen-ROUTE ctx t (+ 2 indent)) "]")))))
+         "])")))
+
+(defn- gen-plus
+  [ctx tree indent]
+  (let [pre (apply str (repeat indent "  "))
+        ;; Update path
+        ctx (update-in ctx [:path] conj 0)]
+    (str pre "(gen/such-that not-empty (gen/vector\n"
+         (gen-ROUTE ctx (:parser tree) (+ 1 indent)) "))")))
 
 (defn- gen-regexp
   "Value must match regexp. For common space value \\s* and \\s+
@@ -106,30 +167,10 @@
       :else
       (str pre "(chuck/string-from-regex " (pr-str re) ")"))))
 
-;; TODO: :hide option
 (defn- gen-string
   [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))]
     (str pre "(gen/return " (pr-str (:string tree)) ")")))
-
-(defn- gen-star
-  [ctx tree indent]
-  (let [pre (apply str (repeat indent "  "))]
-    (str pre "(gen/vector\n"
-         (gen-ROUTE ctx (:parser tree) (+ 1 indent)) ")")))
-
-(defn- gen-plus
-  [ctx tree indent]
-  (let [pre (apply str (repeat indent "  "))]
-    (str pre "(gen/such-that not-empty (gen/vector\n"
-         (gen-ROUTE ctx (:parser tree) (+ 1 indent)) "))")))
-
-(defn- gen-opt
-  [ctx tree indent]
-  (let [pre (apply str (repeat indent "  "))]
-    (str pre "(gen/one-of [\n"
-         pre "  (gen/return \"\")\n"
-         (gen-ROUTE ctx (:parser tree) (+ 1 indent)) "])")))
 
 (defn- gen-epsilon
   [ctx tree indent]
@@ -137,7 +178,6 @@
     (str pre "(gen/return \"\")")))
 
 ;; TODO: mutual recursion?
-;; TODO: :hide option
 (defn- gen-nt
   [{:keys [cur-nt] :as ctx} tree indent]
   (let [pre (apply str (repeat indent "  "))
@@ -155,14 +195,17 @@
 ;;;;;;
 
 (def tag-to-gen
-  {:cat     gen-cat
+  {;; combinators
+   :cat     gen-cat
    :alt     gen-alt
    :ord     gen-ord
+   :star    gen-star
+   :opt     gen-opt
+   :plus    gen-plus
+
+   ;; non-terminals/terminal
    :regexp  gen-regexp
    :string  gen-string
-   :star    gen-star
-   :plus    gen-plus
-   :opt     gen-opt
    :epsilon gen-epsilon
    :nt      gen-nt})
 
@@ -233,7 +276,7 @@
            (gen-ROUTE ctx (prune-rule-recursion k v) (+ 1 indent)) ")")
       (str (gen-ROUTE ctx v indent)))))
 
-(defn- check-and-order-rules
+(defn check-and-order-rules
   "Takes an instaparse grammar and returns a sequence of the rule
   names in the order that they can be defined (reverse dependency
   order). If the grammar contains mutually recursive (non-direct)
@@ -249,25 +292,6 @@
 
 ;; Higher level textual generators
 
-(defn apply-grammar-updates
-  "Replace the generators in the grammar as defined by the list of
-  {:path PATH :value VALUE} maps in grammar-updates. Find each :path
-  in a grammar and replace it with :value (using specter's setval).
-  This allows us to replace generators in the grammar with references
-  to other generators (such as real generators from a Clojure
-  namespace)."
-  [grammar grammar-updates]
-  (reduce (fn [g {:keys [path value]}]
-            (setval path value g))
-          grammar grammar-updates))
-
-(defn- mangle-grammar
-  [ctx grammar]
-  (let [gu (:grammar-updates ctx)]
-    (if (fn? gu)
-      (gu ctx grammar)
-      (apply-grammar-updates grammar gu))))
-
 (defn grammar->generator-defs-source
   "Takes an grammar (loaded using load-grammar) and returns the text
   of a namespace with top-level defines (defs) for all the rules. If
@@ -277,10 +301,9 @@
   rule. Only the start rule flattens the generated values into a final
   string."
   [{:keys [start] :as ctx} grammar]
-  (let [grammar (mangle-grammar ctx grammar)
-        _ (when (:verbose ctx)
-            (util/pr-err "Ordering rules and checking for mutual recursion"))
-        ordered-rules (check-and-order-rules grammar)
+  (when (:verbose ctx)
+    (util/pr-err "Ordering rules and checking for mutual recursion"))
+  (let [ordered-rules (check-and-order-rules grammar)
         start (or start (:start (meta grammar)))]
     (string/join
       "\n\n"
@@ -300,10 +323,9 @@
   generators (indexed by rule-name keyword)."
   [{:keys [function] :as ctx} grammar]
   (assert function "No function name specified")
-  (let [grammar (mangle-grammar ctx grammar)
-        _ (when (:verbose ctx)
-            (util/pr-err "Ordering rules and checking for mutual recursion"))
-        ordered-rules (check-and-order-rules grammar)
+  (when (:verbose ctx)
+    (util/pr-err "Ordering rules and checking for mutual recursion"))
+  (let [ordered-rules (check-and-order-rules grammar)
         partitioned-rules (map-indexed #(vector %1 %2)
                                        (partition-all RULES-PER-FUNC
                                                       ordered-rules))
@@ -338,7 +360,16 @@
         "    g))"))))
 
 (defn eval-generator-source
+  "Takes a src string containing Clojure code, evaluates it and
+  returns the last thing evaluated."
   [src]
   (binding [*ns* (create-ns 'instacheck.codegen)]
     (load-string src)))
 
+(defn generator-func->generator
+  "Takes a generator factory function, a start rule keyword, and an
+  optional default weights map. Returns a test.check generator."
+  [gen-fn start & [weights]]
+  (let [gen-map (gen-fn {} (or weights {}))
+        generator (gen/fmap util/flatten-text (get gen-map start))]
+    generator))

@@ -1,4 +1,4 @@
-# Instacheck 0.6.2
+# Instacheck 0.7.0
 
 *Instaparse meets test.check: property-based testing with inputs defined as EBNF grammars*
 
@@ -19,7 +19,7 @@ smallest version that still fails.
 Add the following to your Clojure dependencies:
 
 ```clojure
-[kanaka/instacheck "0.6.2"]
+[kanaka/instacheck "0.7.0"]
 ```
 
 Here is an example of using instacheck with instaparse and test.check:
@@ -41,7 +41,7 @@ Here is an example of using instacheck with instaparse and test.check:
 (tc-gen/sample gen)
 
 ;; A test.check input property with gen
-(def prop (tc-prop/for-all* [gen] #(< (count %) 5)))
+(def prop (tc-prop/for-all* [gen] #(<= (count %) 7)))
 ;; Run quick-check for 10 iterations on prop
 (tc/quick-check 10 prop)
 ```
@@ -54,7 +54,7 @@ instacheck that encapsulate instaparse and test.check functionality:
 
 (defn checkit [grammar opts]
   (let [gen (ebnf->gen {} grammar)
-        check-fn #(do (prn :sample %) (< (count %) 5))
+        check-fn #(do (prn :sample %) (<= (count %) 7))
         report-fn #(prn :report %)]
     (run-check opts gen check-fn report-fn)))
 
@@ -94,7 +94,7 @@ then generate 10 samples using the modified weights file:
 ```bash
 rm tmp/samp*
 lein run samples test/bc.ebnf --weights-output tmp/bc-weights.edn tmp/
-    # change the weight for 7 (:nz-digit :alt 6) to 1000
+    # change the weight for "7" [:nz-digit :alt 6] to 1000
 lein run samples test/bc.ebnf --weights tmp/bc-weights.edn tmp/
 ```
 
@@ -107,9 +107,20 @@ by zero) and then run the tests again:
 ```bash
 rm tmp/samp*
 lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh -q %
-    # tweak 0 to increase frequency
+    # increase frequency of "0" [:any-number :alt 0] to 1000
+rm tmp/samp*
 lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh -q %
 ```
+
+Parse weights out of an existing test case then use those weights to
+generate similar samples:
+
+```bash
+lein run parse test/bc.ebnf test/bc.samp1 > tmp/bc-weights2.edn
+rm tmp/samp*
+lein run samples test/bc.ebnf --weights tmp/bc-weights2.edn tmp/
+```
+
 
 ## License
 

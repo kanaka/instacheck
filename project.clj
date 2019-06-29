@@ -1,4 +1,4 @@
-(defproject kanaka/instacheck "0.6.2"
+(defproject kanaka/instacheck "0.7.0"
   :description "Property-based testing with inputs defined as EBNF grammars"
   :url "https://github.com/kanaka/instacheck"
   :license {:name "Mozilla Public License version 2"
@@ -13,6 +13,9 @@
                  [org.clojure/test.check "0.10.0-alpha4"]
 
                  ;; Patched version (retain comments, parse path log)
-                 [kanaka/instaparse "1.4.9.1"]]
+                 [kanaka/instaparse "1.4.9.2"]]
+
+  :profiles {:cli  {:main instacheck.cli}
+             :core {:main instacheck.core}}
 
   :main instacheck.cli)

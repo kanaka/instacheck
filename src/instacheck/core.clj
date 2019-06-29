@@ -5,7 +5,6 @@
             [clojure.test.check.properties]
             [clojure.test.check.generators :as gen]
 
-            [instacheck.util :as i-util]
             [instacheck.grammar :as i-grammar]
             [instacheck.codegen :as i-codegen]
 
@@ -14,10 +13,13 @@
 
 ;; Make some common definitions available from core
 (def load-grammar i-grammar/load-grammar)
-(def filter-alts i-grammar/filter-alts)
-(def parse-grammar-comments i-grammar/parse-grammar-comments)
+(def get-in-grammar-node i-grammar/get-in-grammar-node)
+(def update-in-grammar-node i-grammar/update-in-grammar-node)
+(def assoc-in-grammar-node i-grammar/assoc-in-grammar-node)
 
-(def apply-grammar-updates i-codegen/apply-grammar-updates)
+(def wtrek i-grammar/wtrek)
+(def path-log-wtrek i-grammar/path-log-wtrek)
+
 (def grammar->generator-func-source i-codegen/grammar->generator-func-source)
 (def grammar->generator-defs-source i-codegen/grammar->generator-defs-source)
 
@@ -29,18 +31,16 @@
   grammar object."
   [{:keys [start] :as ctx} grammar]
   (let [ctx (assoc ctx :function "ephemeral")
+        start (or start (:start (meta grammar)))
         fn-src (i-codegen/grammar->generator-func-source ctx grammar)
         gen-fn (i-codegen/eval-generator-source fn-src)
-        start (or start (:start (meta grammar)))
-        gens (gen-fn (:weights ctx))
-        gen (gen/fmap i-util/flatten-text (get gens start))]
+        gen (i-codegen/generator-func->generator gen-fn start (:weights ctx))]
     (with-meta
       gen
       {:grammar grammar
-       :source fn-src
-       :function gen-fn
-       :context ctx
-       :generators gens
+       :ctx ctx
+       :fn-src fn-src
+       :gen-fn gen-fn
        :cur-start start
        :cur-generator gen})))
 
@@ -48,17 +48,17 @@
   "Return a new generator object with runtime properties adjusted
   (those that don't require eval of the function source again). Only
   weights and start rule are supported currently."
-  [obj & {:keys [weights start]}]
-  (let [{:keys [function context cur-start]} (meta obj)
+  [obj {:keys [weights start]}]
+  (let [{:keys [gen-fn ctx cur-start]} (meta obj)
+        ctx (assoc ctx :weights (or weights (:weights ctx)))
         start (or start cur-start)
-        weights (or weights (:weights context))
-        gens (function weights)
-        gen (gen/fmap i-util/flatten-text (get gens start))]
+        gen (i-codegen/generator-func->generator gen-fn start (:weights ctx))]
     (with-meta
       gen
-      (assoc (meta obj)
-             :cur-start start
-             :cur-generator gen))))
+      (merge (meta obj)
+             {:ctx (assoc ctx :weights weights)
+              :cur-start start
+              :cur-generator gen}))))
 
 (defn ebnf->gen
   "Takes an EBNF grammar, parser, file, or text string and returns
@@ -89,7 +89,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Final grammar utilities
 
-(defn clj-prefix [nsname]
+(defn- clj-prefix [nsname]
   (str
 "(ns " nsname "
   (:require [clojure.test.check.generators :as gen]
@@ -103,7 +103,9 @@
   [ctx grammar]
   (assert (:namespace ctx) ":namespace required in ctx")
   (str (clj-prefix (:namespace ctx))
-       (i-codegen/grammar->generator-defs-source ctx grammar)))
+       (if (:function ctx)
+         (i-codegen/grammar->generator-func-source ctx grammar)
+         (i-codegen/grammar->generator-defs-source ctx grammar))))
 
 (comment
   (def ebnf-grammar (i-grammar/load-grammar (slurp "test/recur1.ebnf")))

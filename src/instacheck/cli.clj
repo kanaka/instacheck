@@ -35,7 +35,7 @@
 
 (def cmd-options
   {"clj"        [[nil "--function FUNCTION"
-                  "Generate one function that returns a map of generators"]]
+                  "Generate one function named FUNCTION that returns a map of generators"]]
    "samples"    [[nil "--samples SAMPLES"
                   "Number of samples to generate"
                   :default 10
@@ -92,27 +92,23 @@
                       (format "sample-%04d" suffix)
                       (format "sample-%s" suffix)))))
 
+(defn- print-weights [weights]
+  (pprint (into (sorted-map) (grammar/filter-trek-weighted weights))))
+
 (defn- save-weights [ctx file]
   (when file
     (pr-err "Saving weights to" (str file))
-    (spit file (with-out-str (pprint (into (sorted-map)
-                                           @(:weights-res ctx)))))))
+    (spit file (with-out-str (print-weights @(:weights-res ctx))))))
 
 
 ;; do-clj
 
 (defn do-clj
-  [ctx parser clj-ns function]
+  [ctx parser clj-ns]
   (when (not clj-ns)
     (usage ["clj mode requires namespace"]))
-  (let [grammar (grammar/parser->grammar parser)
-        gen-src (if function
-                  codegen/grammar->generator-func-source
-                  codegen/grammar->generator-defs-source)]
-
-    (println
-      (str (core/clj-prefix clj-ns)
-           (gen-src ctx grammar)))))
+  (let [grammar (grammar/parser->grammar parser)]
+    (println (core/grammar->ns (assoc ctx :namespace clj-ns) grammar))))
 
 ;; do-samples
 
@@ -142,18 +138,13 @@
   across all the texts from text-objs."
   [parser text-objs]
   (let [grammar (grammar/parser->grammar parser)
-	;; Get the full set of zero'd out weights by
-	;; calling the def generator but throwing away the
-	;; result. The weights are in the context atom.
-        ctx {:weights-res (atom {})}
-        _ (codegen/grammar->generator-defs-source ctx grammar)
-        zero-weights (into {} (for [[k v] @(:weights-res ctx)] [k 0]))
+        weights (grammar/grammar->weights grammar)
+        zero-weights (into {} (for [[k v] weights] [k 0]))
         ;; Parse each text string
         results (for [{:keys [text location]} text-objs]
-                  (core/parse parser text location))]
-    (merge zero-weights
-           (frequencies
-             (mapcat #(-> % meta :path-log) results)))))
+                  (grammar/path-log-wtrek
+                    grammar (core/parse parser text location)))]
+    (reduce merge zero-weights results)))
 
 (defn parse-weights-from-files
   "Wrapper around parse-weights that marshals the text objects from
@@ -174,7 +165,8 @@
               (println failure)
               (System/exit 1))))]
     ;; Update the ctx result weights
-    (reset! (:weights-res ctx) weights)))
+    (reset! (:weights-res ctx) weights)
+    (print-weights weights)))
 
 ;; do-check
 
@@ -267,7 +259,7 @@
         _ (when (:verbose opts) (pr-err "Loading parser from" ebnf))
         ebnf-parser (instaparse/parser (slurp ebnf))
         _ (when (:verbose opts) (pr-err "Extracting comment weights"))
-        comment-weights (grammar/parse-grammar-comments
+        comment-weights (grammar/ctrek
                           (grammar/parser->grammar ebnf-parser)
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start
@@ -281,7 +273,7 @@
 
         res (condp = cmd
               "clj"
-              (do-clj ctx ebnf-parser (first cmd-args) (:function opts))
+              (do-clj ctx ebnf-parser (first cmd-args))
               "samples"
               (do-samples ctx ebnf-parser (first cmd-args) (:samples opts))
               "parse"
