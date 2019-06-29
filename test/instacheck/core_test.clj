@@ -107,15 +107,15 @@ r1 = 'a' / '<' r1 '>'")
     (testing "self-recursion"
       (let [wa5 (g/grammar->weights g5)
             gen5 (core/ebnf->gen {:weights wa5} g5)
-            samps (take 100 (gen/sample-seq gen5))]
-        (is (= 100 (count samps))
+            samps (take 50 (gen/sample-seq gen5))]
+        (is (= 50 (count samps))
             (every? #(re-seq #"<*.*>*" %) samps))))
 
     (testing "self-recursion containing :ord"
       (let [wa6 (g/grammar->weights g6)
             gen6 (core/ebnf->gen {:weights wa6} g6)
-            samps (take 100 (gen/sample-seq gen6))]
-        (is (= 100 (count samps))
+            samps (take 50 (gen/sample-seq gen6))]
+        (is (= 50 (count samps))
             (every? #(re-seq #"<*a>*" %) samps))))))
 
 (deftest grammar->ns-test

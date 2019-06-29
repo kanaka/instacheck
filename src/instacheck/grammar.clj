@@ -191,24 +191,18 @@
   (apply merge (map (fn [[k v]] (trek-rule* [k] v tx)) grammar)))
 
 (defn trek
-  "Return a node trek (map of grammar paths to grammar leaf nodes)."
-  [grammar]
-  (trek-grammar* grammar (fn [p n] (when (LEAF-TAGS (:tag n))
-                                     {p (dissoc n :comments)}))))
-
-(defn vtrek
-  "Return a vtrek/value trek (map of grammar paths to grammar node values)."
+  "Return a trek of the grammar (map of paths to node values)."
   [grammar]
   (trek-grammar* grammar (fn [p n] (when (LEAF-TAGS (:tag n))
                                      {p (node-to-val n n)}))))
 
-(defn ctrek
-  "Return a ctrek/comment trek (map of grammar paths to parsed
+(defn comment-wtrek
+  "Return a wtrek with comment values (map of grammar paths to parsed
   comments) by reading edn maps from comments in the grammar. Note
-  that this will return different paths than a normal trek/vtrek
-  because a ctrek will only contain :alt/:ord nodes but since comments
-  can occur in internal :alt/:ord nodes a ctrek will have these
-  internal nodes (a trek/vtrek will not).
+  that this will return different paths than a normal trek because
+  a comments can occur on any :alt/:ord nodes and since comments can
+  occur in internal :alt/:ord nodes a comment wtrek will have these
+  internal nodes (a regular trek will not).
 
   Multiple comments with edn maps in the same node will be merged into
   a single map. If the optional comment-tx function is provided it
@@ -259,36 +253,31 @@
 (defn trek->grammar
   "Take a trek and convert it back into a grammar"
   [trek]
-  (into
-    {}
-    (for [[rule-kw rules] (group-by (comp first key) trek)]
-      [rule-kw
-       ;; Build up the tree one path at a time by reducing using
-       ;; path->tree*. Then convert each :parsers val from an
-       ;; idx->val map to a sorted list of vals.
-       (postwalk
-         #(if (:parsers %)
-            (assoc % :parsers (vals (sort-by key (:parsers %))))
-            %)
-         (reduce
-           (fn [tree [p leaf]]
-             (path->tree* tree (subvec p 1) leaf))
-           nil
-           rules))])))
-
-(defn vtrek->grammar
-  "Take a vtrek and convert it back into a grammar"
-  [vtrek]
-  (let [tk (into {} (for [[k v] vtrek] [k (val-to-node v)]))]
-    (trek->grammar tk)))
+  (let [ntrek (into {} (for [[k v] trek] [k (val-to-node v)]))]
+    (into
+      {}
+      (for [[rule-kw rules] (group-by (comp first key) ntrek)]
+        [rule-kw
+         ;; Build up the tree one path at a time by reducing using
+         ;; path->tree*. Then convert each :parsers val from an
+         ;; idx->val map to a sorted list of vals.
+         (postwalk
+           #(if (:parsers %)
+              (assoc % :parsers (vals (sort-by key (:parsers %))))
+              %)
+           (reduce
+             (fn [tree [p leaf]]
+               (path->tree* tree (subvec p 1) leaf))
+             nil
+             rules))]))))
 
 (defn paths-to-nt
   "Given a grammar and a non-terminal keyword nt, return all paths
   within the grammar that have nt as a leaf node."
   [grammar nt]
   (let [gs (trek grammar)
-        nt-leafs (filter #(and (= :nt (:tag (val %)))
-                               (= nt (:keyword (val %)))) gs)]
+        nt-leafs (filter #(and (keyword? (val %))
+                               (= nt (val %))) gs)]
     (seq (map key nt-leafs))))
 
 
@@ -334,8 +323,8 @@
   "Return an wtrek/weight trek (map of grammar paths to weight
   values). Weights will have a weight of default-weight if specified,
   otherwise 100. Note that this will return different paths than
-  a normal trek/vtrek because a wtrek contains all weighted nodes
-  (:alt, :ord, :opt, :star) from the grammar not just leaf nodes."
+  a normal trek because a wtrek contains all weighted nodes (:alt,
+  :ord, :opt, :star) from the grammar not just leaf nodes."
   [grammar & [default-weight]]
   (let [dw (or default-weight 100)
         full-trek (trek-grammar* grammar (fn [p n] {p 0}))
@@ -349,9 +338,9 @@
 (defn path-log-trek
   "Takes a grammar and parse-result parsed using that grammar and
   returns a path-log trek based on the :path-log in parse-result. Note
-  that this will return a different set of paths than a normal
-  trek/vtrek because it contains all nodes of the grammar from the
-  grammar not just leaf nodes."
+  that this will return a different set of paths than a normal trek
+  because it contains all nodes of the grammar from the grammar not
+  just leaf nodes."
   [grammar parse-result]
   (let [weights (-> parse-result meta :path-log frequencies)
         full-trek (trek-grammar* grammar (fn [p n] {p 0}))
@@ -394,8 +383,8 @@
   "Takes a grammar and parse-result parsed using that grammar and
   returns a wtrek with weights set based on the :path-log in
   parse-result. Note that this will return different paths than
-  a normal trek/vtrek because a wtrek contains all weighted nodes
-  (:alt, :ord, :opt, :star) from the grammar not just leaf nodes."
+  a normal trek because a wtrek contains all weighted nodes (:alt,
+  :ord, :opt, :star) from the grammar not just leaf nodes."
   [grammar parse-result]
   (filter-trek-weighted (path-log-trek grammar parse-result)))
 
@@ -408,5 +397,5 @@
   [grammar & [default-weight]]
   (let [dw (or default-weight 100)]
     (merge (wtrek grammar dw)
-           (ctrek grammar :weight))))
+           (comment-wtrek grammar :weight))))
 

@@ -259,7 +259,7 @@
         _ (when (:verbose opts) (pr-err "Loading parser from" ebnf))
         ebnf-parser (instaparse/parser (slurp ebnf))
         _ (when (:verbose opts) (pr-err "Extracting comment weights"))
-        comment-weights (grammar/ctrek
+        comment-weights (grammar/comment-wtrek
                           (grammar/parser->grammar ebnf-parser)
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start

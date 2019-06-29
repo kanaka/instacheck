@@ -156,9 +156,9 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             g {:r1 {:tag :nt :keyword :r2}
                :r2 {:tag :alt :parsers '({:tag :string :string "abc"}
                                          {:tag :string :string "def"})}}
-            tk {[:r1] {:tag :nt :keyword :r2}
-                [:r2 :alt 0] {:tag :string :string "abc"}
-                [:r2 :alt 1] {:tag :string :string "def"}}]
+            tk {[:r1] :r2
+                [:r2 :alt 0] "abc"
+                [:r2 :alt 1] "def"}]
         (is (= (instaparse/parser ebnf)
                (g/grammar->parser g :r1)
                (g/grammar->parser (g/trek->grammar tk) :r1)))))))
@@ -258,15 +258,8 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 ;; trek functions
 
 (deftest trek-test
-  (testing "trek, vtrek, wtrek"
+  (testing "trek, wtrek"
     (is (= (g/trek g1)
-           '{[:start :alt 0] {:tag :string :string "qux"}
-             [:start :alt 1] {:tag :nt :keyword :foobar}
-             [:foobar :alt 0] {:tag :string :string "foo"}
-             [:foobar :alt 1 :cat 0] {:tag :string :string "ba"}
-             [:foobar :alt 1 :cat 1 :alt 0] {:tag :string :string "r"}
-             [:foobar :alt 1 :cat 1 :alt 1] {:tag :string :string "z"}}))
-    (is (= (g/vtrek g1)
            '{[:start :alt 0] "qux"
              [:start :alt 1] :foobar
              [:foobar :alt 0] "foo"
@@ -280,18 +273,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1] 25
             [:foobar :alt 1 :cat 1 :alt 0] 25
             [:foobar :alt 1 :cat 1 :alt 1] 25}))
-    (is (= (assoc-in (g/trek g2)
-                     [[:re] :regexp] :DELETED)
-           '{[:foo] {:tag :nt :keyword :bar}
-             [:bar] {:tag :string :string "bar"}
-             [:star :star 0] {:tag :string :string "1"}
-             [:plus :plus 0] {:tag :string :string "2"}
-             [:opt :opt 0] {:tag :string :string "3"}
-             [:str] {:tag :string :string "4"}
-             [:re] {:tag :regexp :regexp :DELETED}
-             [:ep] {:tag :epsilon}}))
-    (is (= (dissoc (g/vtrek g2)
-                   [:re])
+    (is (= (dissoc (g/trek g2) [:re])
            '{[:foo] :bar
              [:bar] "bar"
              [:star :star 0] "1"
@@ -301,15 +283,6 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              ;;[:re] #"5"
              [:ep] ""}))
     (is (= (g/trek g4)
-           '{[:x1 :cat 0] {:tag :string :string "a"}
-             [:x1 :cat 1 :star 0 :alt 0] {:tag :string :string "b"}
-             [:x1 :cat 1 :star 0 :alt 1] {:tag :string :string "c"}
-             [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 0] {:tag :string :string "d"}
-             [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 0]
-             {:tag :string :string "e"}
-             [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 1]
-             {:tag :string :string "f"}}))
-    (is (= (g/vtrek g4)
            '{[:x1 :cat 0] "a"
              [:x1 :cat 1 :star 0 :alt 0] "b"
              [:x1 :cat 1 :star 0 :alt 1] "c"
@@ -317,14 +290,6 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 0] "e"
              [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 1] "f"}))
     (is (= (g/trek g5)
-           '{[:start :alt 0] {:tag :string :string "qux"}
-             [:start :alt 1] {:tag :string :string "quux"}
-             [:start :alt 2] {:tag :nt :keyword :foobar}
-             [:foobar :alt 0] {:tag :string :string "foo"}
-             [:foobar :alt 1 :cat 0] {:tag :string :string "ba"}
-             [:foobar :alt 1 :cat 1 :alt 0] {:tag :string :string "r"}
-             [:foobar :alt 1 :cat 1 :alt 1] {:tag :string :string "z"}}))
-    (is (= (g/vtrek g5)
            '{[:start :alt 0] "qux"
              [:start :alt 1] "quux"
              [:start :alt 2] :foobar
@@ -341,8 +306,8 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1 :cat 1 :alt 0] 35
             [:foobar :alt 1 :cat 1 :alt 1] 35}))))
 
-(deftest ctrek-test
-  (testing "ctrek, grammar->weights"
+(deftest comment-wtrek-test
+  (testing "comment-wtrek, grammar->weights"
     (is (= (g/wtrek g5 35)
            {[:start :alt 0] 35,
             [:start :alt 1] 35,
@@ -351,14 +316,14 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1] 35,
             [:foobar :alt 1 :cat 1 :alt 0] 35,
             [:foobar :alt 1 :cat 1 :alt 1] 35}))
-    (is (= (g/ctrek g5)
+    (is (= (g/comment-wtrek g5)
            {[:start :alt 0] {:weight 10},
             [:start :alt 2] {:weight 20},
             [:foobar :alt 0] {:weight 30},
             [:foobar :alt 1] {:weight 40},
             [:foobar :alt 1 :cat 1 :alt 0] {:weight 50},
             [:foobar :alt 1 :cat 1 :alt 1] {:weight 60}}))
-    (is (= (g/ctrek g5 :weight)
+    (is (= (g/comment-wtrek g5 :weight)
            {[:start :alt 0] 10,
             [:start :alt 2] 20,
             [:foobar :alt 0] 30,
@@ -385,9 +350,9 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 (deftest trek->grammar-test
   (testing "trek->grammar"
     (testing "Contruct grammar from trek"
-      (is (= (g/trek->grammar {[:r1] {:tag :nt :keyword :r2}
-                               [:r2 :alt 0] {:tag :string :string "abc"}
-                               [:r2 :alt 1] {:tag :string :string "def"}})
+      (is (= (g/trek->grammar {[:r1] :r2
+                               [:r2 :alt 0] "abc"
+                               [:r2 :alt 1] "def"})
              {:r1 {:tag :nt :keyword :r2}
               :r2 {:tag :alt :parsers '({:tag :string :string "abc"}
                                         {:tag :string :string "def"})}})))
@@ -401,26 +366,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
       (is (= g6 (g/trek->grammar (g/trek g6))))
       (is (= g7 (g/trek->grammar (g/trek g7))))
       (is (= g8 (g/trek->grammar (g/trek g8))))
-      (is (= g9 (g/trek->grammar (g/trek g9)))))
-
-    (testing "Contruct grammar from vtrek"
-      (is (= (g/vtrek->grammar {[:r1] :r2
-                                [:r2 :alt 0] "abc"
-                                [:r2 :alt 1] "def"})
-             {:r1 {:tag :nt :keyword :r2}
-              :r2 {:tag :alt :parsers '({:tag :string :string "abc"}
-                                        {:tag :string :string "def"})}})))
-
-    (testing "Test round-tripping from vtrek and back to grammar"
-      ;; Skip g5 since comments are not roundtripped
-      (is (= g1 (g/vtrek->grammar (g/vtrek g1))))
-      (is (= g2 (g/vtrek->grammar (g/vtrek g2))))
-      (is (= g3 (g/vtrek->grammar (g/vtrek g3))))
-      (is (= g4 (g/vtrek->grammar (g/vtrek g4))))
-      (is (= g6 (g/vtrek->grammar (g/vtrek g6))))
-      (is (= g7 (g/vtrek->grammar (g/vtrek g7))))
-      (is (= g8 (g/vtrek->grammar (g/vtrek g8))))
-      (is (= g9 (g/vtrek->grammar (g/vtrek g9)))))))
+      (is (= g9 (g/trek->grammar (g/trek g9)))))))
 
 (deftest paths-to-nt-test
   (testing "paths-to-nt"
