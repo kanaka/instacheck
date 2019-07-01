@@ -32,6 +32,12 @@
     (assert start "start must be either explicit or in grammar metadata")
     (instaparse/parser grammar :start start)))
 
+(defn load-parser
+  "Takes an EBNF grammar test string and returns an instacheck
+  parser."
+  [ebnf]
+  (instaparse/parser ebnf))
+
 (defn load-grammar
   "Takes an EBNF grammar test string and returns an instacheck
   grammar (via parser->grammar)."

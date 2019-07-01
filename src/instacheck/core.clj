@@ -1,9 +1,9 @@
 (ns instacheck.core
   (:require [clojure.string :as string]
-            [instaparse.core :as instaparse]
             [clojure.test.check]
             [clojure.test.check.properties]
             [clojure.test.check.generators :as gen]
+            [instaparse.core :as instaparse]
 
             [instacheck.grammar :as grammar]
             [instacheck.codegen :as codegen]
@@ -12,14 +12,17 @@
             [clojure.pprint :refer [pprint]]))
 
 ;; Make some common definitions available from core
-(def load-grammar grammar/load-grammar)
-(def get-in-grammar grammar/get-in-grammar)
+(def load-parser       grammar/load-parser)
+(def load-grammar      grammar/load-grammar)
+(def parser->grammar   grammar/parser->grammar)
+(def grammar->parser   grammar/grammar->parser)
+(def get-in-grammar    grammar/get-in-grammar)
 (def update-in-grammar grammar/update-in-grammar)
-(def assoc-in-grammar grammar/assoc-in-grammar)
-(def save-weights grammar/save-weights)
-
-(def wtrek grammar/wtrek)
-(def path-log-wtrek grammar/path-log-wtrek)
+(def assoc-in-grammar  grammar/assoc-in-grammar)
+(def trek              grammar/trek)
+(def wtrek             grammar/wtrek)
+(def path-log-wtrek    grammar/path-log-wtrek)
+(def save-weights      grammar/save-weights)
 
 (def grammar->generator-func-source codegen/grammar->generator-func-source)
 (def grammar->generator-defs-source codegen/grammar->generator-defs-source)
