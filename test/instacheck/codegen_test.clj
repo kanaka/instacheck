@@ -2,7 +2,6 @@
   (:require [clojure.pprint :refer [pprint]]
             [clojure.test :refer [deftest testing is]]
             [clojure.test.check.generators :as gen]
-            [com.rpl.specter :refer [nthpath]]
             [instacheck.grammar :as g]
             [instacheck.codegen :as cg]))
 

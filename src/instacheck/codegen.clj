@@ -1,7 +1,6 @@
 (ns instacheck.codegen
   (:require [clojure.string :as string]
             [clojure.walk :as walk]
-            [com.rpl.specter :refer [setval]]
 
             [alandipert.kahn :as kahn]
             [instacheck.util :as util]

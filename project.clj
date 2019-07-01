@@ -7,7 +7,6 @@
   :source-paths ["src"]
 
   :dependencies [[org.clojure/clojure "1.10.0"]
-                 [com.rpl/specter "1.0.0"]
                  [com.gfredericks/test.chuck "0.2.9"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/test.check "0.10.0-alpha4"]
