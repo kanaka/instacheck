@@ -124,6 +124,13 @@
   [grammar path value]
   (update-in-grammar grammar path (fn [n] value)))
 
+(defn apply-grammar-update
+  "Takes a grammar and an map of grammar paths to grammar nodes (an
+  update-trek). Replaces each update path in the grammar ith the new
+  update node."
+  [grammar utrek]
+  (reduce (fn [g [p n]] (assoc-in-grammar g p n)) grammar utrek))
+
 (defn children-of-node
   "Given a grammar and path node within that grammar return the paths
   of the children (:alt, :ord, and :cat nodes)."

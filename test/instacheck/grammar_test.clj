@@ -221,6 +221,15 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
                '{:r1 {:tag :alt, :parsers ({:tag :string, :string "ab"}
                                            {:tag :string, :string "cd"})}}))))))
 
+(deftest apply-grammar-update-test
+  (is (= (g/apply-grammar-update g3 {[:r1] {:tag :nt :keyword :r2}
+                                     [:r2 :alt 1] {:tag :string, :string "m"}
+                                     [:r3] {:tag :nt :keyword :gen/char-ascii}})
+         '{:r1 {:tag :nt, :keyword :r2},
+           :r2 {:tag :alt, :parsers ({:tag :nt, :keyword :r3}
+                                     {:tag :string, :string "m"})},
+           :r3 {:tag :nt,  :keyword :gen/char-ascii}})))
+
 (deftest children-of-node-test
   (testing "children-of-node"
     (testing "Children of an alt node"
