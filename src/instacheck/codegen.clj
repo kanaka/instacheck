@@ -148,8 +148,8 @@
   (let [pre (apply str (repeat indent "  "))
         ;; Update path
         ctx (update-in ctx [:path] conj 0)]
-    (str pre "(gen/such-that not-empty (gen/vector\n"
-         (gen-ROUTE ctx (:parser tree) (+ 1 indent)) "))")))
+    (str pre "(igen/vector+\n"
+         (gen-ROUTE ctx (:parser tree) (+ 1 indent)) ")")))
 
 (defn- gen-regexp
   "Value must match regexp. For common space value \\s* and \\s+

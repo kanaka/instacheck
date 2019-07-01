@@ -93,14 +93,14 @@ r1 = 'i' #'[0-9]*'")
     (testing "star"
       (is (= (#'cg/gen-rule-body {} :r8 (:r8 g6) 0)
              ;;"(gen/vector\n  gen-r1)"
-             "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    (gen/such-that not-empty (gen/vector\n      gen-r1))]])")))
+             "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    (igen/vector+\n      gen-r1)]])")))
     (testing "opt"
       (is (= (#'cg/gen-rule-body {} :r9 (:r9 g6) 0)
              ;;"(gen/one-of [\n  (gen/return \"\")\n  gen-r1])"
              "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    gen-r1]])")))
     (testing "plus"
       (is (= (#'cg/gen-rule-body {} :r10 (:r10 g6) 0)
-             "(gen/such-that not-empty (gen/vector\n  gen-r1))")))
+             "(igen/vector+\n  gen-r1)")))
     (testing "recursion"
       (is (= (#'cg/gen-rule-body {} :r11 (:r11 g6) 0)
              "(gen/recursive-gen\n  (fn [inner]\n    (igen/freq [\n      [100\n        (gen/return \"a\")]\n      [100\n        inner]]))\n  (gen/return \"a\"))")))))

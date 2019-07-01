@@ -15,3 +15,7 @@
       (gen/return ""))
     (gen/frequency (sort (comparator (fn [a b] (> (first a) (first b))))
                          pairs))))
+(defn vector+
+  "Version of standard vector generator with at least one item"
+  [gen]
+  (gen/such-that not-empty (gen/vector gen)))
