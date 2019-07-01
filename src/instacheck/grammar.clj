@@ -80,7 +80,7 @@
   [targ-path path node f args]
   (let [tag (:tag node)]
     (cond
-      (= targ-path path)
+      (= (vec targ-path) path)
       (apply f node args)
 
       ;; :alt, :cat
