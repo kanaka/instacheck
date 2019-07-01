@@ -50,13 +50,13 @@ Here is an example of using some convenience functions provided by
 instacheck that encapsulate instaparse and test.check functionality:
 
 ```clojure
-(require '[instacheck.core :refer [ebnf->gen run-check]])
+(require '[instacheck.core :refer [ebnf->gen quick-check]])
 
 (defn checkit [grammar opts]
   (let [gen (ebnf->gen {} grammar)
         check-fn #(do (prn :sample %) (<= (count %) 7))
         report-fn #(prn :report %)]
-    (run-check opts gen check-fn report-fn)))
+    (quick-check opts gen check-fn report-fn)))
 
 (checkit "root = ('foo' #'[0-9]' ) 'bar' *" {:iterations 5})
 ```

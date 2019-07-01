@@ -166,46 +166,46 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 
 ;; grammar functions
 
-(deftest get-in-grammar-node-test
-  (testing "get-in-grammar-node"
+(deftest get-in-grammar-test
+  (testing "get-in-grammar"
     (testing "top rule only"
-      (is (= (g/get-in-grammar-node g1 [:start])
+      (is (= (g/get-in-grammar g1 [:start])
              '{:tag :alt :parsers ({:tag :string :string "qux"}
                                    {:tag :nt :keyword :foobar})})))
     (testing "non-existent top rule"
-      (is (= (g/get-in-grammar-node g1 [:not-there])
+      (is (= (g/get-in-grammar g1 [:not-there])
              nil)))
     (testing "return whole :alt"
-      (is (= (g/get-in-grammar-node g1 [:start :alt])
+      (is (= (g/get-in-grammar g1 [:start :alt])
              '{:tag :alt :parsers ({:tag :string :string "qux"}
                                    {:tag :nt :keyword :foobar})})))
     (testing "just one branch of :alt"
-      (is (= (g/get-in-grammar-node g1 [:foobar :alt 0])
+      (is (= (g/get-in-grammar g1 [:foobar :alt 0])
              {:tag :string :string "foo"})))
     (testing "including :cat, :star and :opt"
-      (is (= (g/get-in-grammar-node g4 [:x1 :cat 0])
+      (is (= (g/get-in-grammar g4 [:x1 :cat 0])
              {:tag :string :string "a"}))
-      (is (= (g/get-in-grammar-node g4 [:x1 :cat 1 :star 0 :alt 0])
+      (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 0])
              {:tag :string :string "b"}))
-      (is (= (g/get-in-grammar-node g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0])
+      (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0])
              {:tag :ord,
               :parser1 {:tag :string, :string "d"},
               :parser2 {:tag :ord,
                         :parser1 {:tag :string, :string "e"},
                         :parser2 {:tag :string, :string "f"}}}))
-      (is (= (g/get-in-grammar-node g4 [:x1 :cat 1 :star 0 :alt 2 :opt nil])
+      (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt nil])
              nil))
-      (is (= (g/get-in-grammar-node g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 0])
+      (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 0])
              {:tag :string :string "d"}))
-      (is (= (g/get-in-grammar-node g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 0])
+      (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 0])
              {:tag :string :string "e"})))))
 
-(deftest assoc-and-update-in-grammar-node-test
+(deftest assoc-and-update-in-grammar-test
   (testing "grammar update functions"
-    (testing "assoc-in-grammar-node"
-      (is (= (g/assoc-in-grammar-node
+    (testing "assoc-in-grammar"
+      (is (= (g/assoc-in-grammar
                g3 [:r2 :alt 1]
-               (g/get-in-grammar-node
+               (g/get-in-grammar
                  g3 [:r2 :alt 1 :cat 0]))
              '{:r1 {:tag :alt, :parsers ({:tag :nt, :keyword :r2}
                                          {:tag :nt, :keyword :r3})},
@@ -213,9 +213,9 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
                                          {:tag :string, :string "m"})},
                :r3 {:tag :string, :string "x"}})))
 
-    (testing "update-in-grammar-node"
+    (testing "update-in-grammar"
       (let [g (g/load-grammar "r1 = 'ab' | 'c'")]
-        (is (= (g/update-in-grammar-node
+        (is (= (g/update-in-grammar
                  g [:r1 :alt 1]
                  #(assoc % :string (str (:string %) "d")))
                '{:r1 {:tag :alt, :parsers ({:tag :string, :string "ab"}
@@ -298,24 +298,16 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              [:foobar :alt 1 :cat 1 :alt 0] "r"
              [:foobar :alt 1 :cat 1 :alt 1] "z"}))
     (is (= (g/wtrek g5 35)
-           {[:start :alt 0] 35
+           {[:start :alt 0] 10
             [:start :alt 1] 35
-            [:start :alt 2] 35
-            [:foobar :alt 0] 35
-            [:foobar :alt 1] 35
-            [:foobar :alt 1 :cat 1 :alt 0] 35
-            [:foobar :alt 1 :cat 1 :alt 1] 35}))))
+            [:start :alt 2] 20
+            [:foobar :alt 0] 30
+            [:foobar :alt 1] 40
+            [:foobar :alt 1 :cat 1 :alt 0] 50
+            [:foobar :alt 1 :cat 1 :alt 1] 60}))))
 
 (deftest comment-wtrek-test
-  (testing "comment-wtrek, grammar->weights"
-    (is (= (g/wtrek g5 35)
-           {[:start :alt 0] 35,
-            [:start :alt 1] 35,
-            [:start :alt 2] 35,
-            [:foobar :alt 0] 35,
-            [:foobar :alt 1] 35,
-            [:foobar :alt 1 :cat 1 :alt 0] 35,
-            [:foobar :alt 1 :cat 1 :alt 1] 35}))
+  (testing "comment-wtrek, wtrek"
     (is (= (g/comment-wtrek g5)
            {[:start :alt 0] {:weight 10},
             [:start :alt 2] {:weight 20},
@@ -323,14 +315,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1] {:weight 40},
             [:foobar :alt 1 :cat 1 :alt 0] {:weight 50},
             [:foobar :alt 1 :cat 1 :alt 1] {:weight 60}}))
-    (is (= (g/comment-wtrek g5 :weight)
-           {[:start :alt 0] 10,
-            [:start :alt 2] 20,
-            [:foobar :alt 0] 30,
-            [:foobar :alt 1] 40,
-            [:foobar :alt 1 :cat 1 :alt 0] 50,
-            [:foobar :alt 1 :cat 1 :alt 1] 60}))
-    (is (= (g/grammar->weights g5)
+    (is (= (g/wtrek g5)
            {[:start :alt 0] 10,
             [:start :alt 1] 100,
             [:start :alt 2] 20,
@@ -338,7 +323,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1] 40,
             [:foobar :alt 1 :cat 1 :alt 0] 50,
             [:foobar :alt 1 :cat 1 :alt 1] 60}))
-    (is (= (g/grammar->weights g5 234)
+    (is (= (g/wtrek g5 234)
            {[:start :alt 0] 10,
             [:start :alt 1] 234,
             [:start :alt 2] 20,
@@ -414,6 +399,19 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
               [:r :alt 1 :cat 1 :alt 0 :opt 0] 100
               [:r :alt 1 :cat 1 :ord 0] 100})))))
 
+(deftest wtrek-test
+  (testing "wtrek"
+    (is (= (g/wtrek g3)
+           {[:r2 :alt 0] 100,
+            [:r1 :alt 0] 100,
+            [:r1 :alt 1] 100,
+            [:r2 :alt 1] 100}))
+    (is (= (g/wtrek g3 12)
+           {[:r2 :alt 0] 12,
+            [:r1 :alt 0] 12,
+            [:r1 :alt 1] 12,
+            [:r2 :alt 1] 12}))))
+
 (deftest path-log-trek-test
   (testing "path-log-trek"
     (is (= (g/path-log-trek g9 (c/parse p9 "a"))
@@ -451,7 +449,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 2,
             [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 3}))))
 
-(deftest wtrek-and-path-log-wtrek-test
+(deftest path-log-wtrek-test
   (testing "wtrek, path-log-wtrek"
     (testing "g6"
       (is (= (g/wtrek g6)
@@ -607,16 +605,6 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 3,
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 2})))))
 
-
-(deftest grammar->weights-test
-  (testing "grammar->weights"
-    (is (= (g/grammar->weights g3)
-           {[:r2 :alt 0] 100,
-            [:r1 :alt 0] 100,
-            [:r1 :alt 1] 100,
-            [:r2 :alt 1] 100}))
-    (is (= (g/grammar->weights g3 12)
-           {[:r2 :alt 0] 12,
-            [:r1 :alt 0] 12,
-            [:r1 :alt 1] 12,
-            [:r2 :alt 1] 12}))))
+(deftest print-weights-test
+  ;; TODO: print-weights test
+  )

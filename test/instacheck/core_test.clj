@@ -60,7 +60,7 @@ r1 = 'a' / '<' r1 '>'")
       (let [ctx2 {:weights-res (atom {})}
             gen2 (core/ebnf->gen ctx2 g2)
             wa2 @(:weights-res ctx2)
-            g2w (g/grammar->weights g2)]
+            g2w (g/wtrek g2)]
         (is (re-seq #"(?s)g \(assoc g :foobar gen-foobar\).*g \(assoc g :start gen-start\)"
                     (:fn-src (meta gen2))))
         (is (= wa2
@@ -93,26 +93,26 @@ r1 = 'a' / '<' r1 '>'")
         (is (every? #(= "c" %) sampsB))))
 
     (testing "non-zero on a single path of an :alt"
-      (let [wa4 (g/grammar->weights g4)
+      (let [wa4 (g/wtrek g4)
             gen4 (core/ebnf->gen {:weights wa4} g4)
             samps (take 100 (gen/sample-seq gen4))]
         (is (every? #(= "d" %) samps))))
 
     (testing "non-zero on a single path of an :alt"
-      (let [wa4 (g/grammar->weights g4)
+      (let [wa4 (g/wtrek g4)
             gen4 (core/ebnf->gen {:weights wa4} g4)
             samps (take 100 (gen/sample-seq gen4))]
         (is (every? #(= "d" %) samps))))
 
     (testing "self-recursion"
-      (let [wa5 (g/grammar->weights g5)
+      (let [wa5 (g/wtrek g5)
             gen5 (core/ebnf->gen {:weights wa5} g5)
             samps (take 50 (gen/sample-seq gen5))]
         (is (= 50 (count samps))
             (every? #(re-seq #"<*.*>*" %) samps))))
 
     (testing "self-recursion containing :ord"
-      (let [wa6 (g/grammar->weights g6)
+      (let [wa6 (g/wtrek g6)
             gen6 (core/ebnf->gen {:weights wa6} g6)
             samps (take 50 (gen/sample-seq gen6))]
         (is (= 50 (count samps))
@@ -124,29 +124,6 @@ r1 = 'a' / '<' r1 '>'")
       ;;    (println ns-src)
       (is (re-seq #"(?s)\(def gen-r3.*\(gen/return \"a\"\).*\).*\(def gen-r2.*\)"
                   ns-src)))))
-
-(deftest run-check-test
-  (testing "run-check all passing"
-    (let [gen5 (core/ebnf->gen {} g5)
-          log (atom {:samples []
-                     :reports []})
-          check-fn (fn [sample]
-                     (swap! log update-in [:samples] conj sample)
-                     true)
-          report-fn (fn [report]
-                      (swap! log update-in [:reports] conj report))
-          qc-res (core/run-check {:iterations 5} gen5 check-fn report-fn)]
-      (is (and (= 5 (-> @log :samples count))
-               (= 6 (-> @log :reports count))))))
-
-  (testing "run-check with a simple failure case"
-    (let [gen5 (core/ebnf->gen {} g5)
-          check-fn (fn [sample] (if (re-seq #"<<" sample) false true))
-          report-fn (fn [report] true)
-          qc-res (core/run-check {:iterations 20} gen5 check-fn report-fn)]
-      ;;(pprint qc-res)
-      (is (get #{"<<0>>" "<<10>>"}
-               (-> qc-res :shrunk :smallest first))))))
 
 (deftest parse-test
   (testing "error throwing parser"
@@ -164,3 +141,31 @@ r1 = 'a' / '<' r1 '>'")
       (is (every? #(and (vector? %)
                         (= :r1 (first %)))
                   (map #(core/parse p5 %) samps))))))
+
+(deftest parse-weights-test
+  ;; TODO: parse-weights test
+  )
+
+(deftest quick-check-test
+  (testing "quick-check all passing"
+    (let [gen5 (core/ebnf->gen {} g5)
+          log (atom {:samples []
+                     :reports []})
+          check-fn (fn [sample]
+                     (swap! log update-in [:samples] conj sample)
+                     true)
+          report-fn (fn [report]
+                      (swap! log update-in [:reports] conj report))
+          qc-res (core/quick-check {:iterations 5} gen5 check-fn report-fn)]
+      (is (and (= 5 (-> @log :samples count))
+               (= 6 (-> @log :reports count))))))
+
+  (testing "quick-check with a simple failure case"
+    (let [gen5 (core/ebnf->gen {} g5)
+          check-fn (fn [sample] (if (re-seq #"<<" sample) false true))
+          report-fn (fn [report] true)
+          qc-res (core/quick-check {:iterations 20} gen5 check-fn report-fn)]
+      ;;(pprint qc-res)
+      (is (get #{"<<0>>" "<<10>>"}
+               (-> qc-res :shrunk :smallest first))))))
+

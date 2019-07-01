@@ -5,23 +5,24 @@
             [clojure.test.check.properties]
             [clojure.test.check.generators :as gen]
 
-            [instacheck.grammar :as i-grammar]
-            [instacheck.codegen :as i-codegen]
+            [instacheck.grammar :as grammar]
+            [instacheck.codegen :as codegen]
 
             ;; Convenient to have already loaded for testing
             [clojure.pprint :refer [pprint]]))
 
 ;; Make some common definitions available from core
-(def load-grammar i-grammar/load-grammar)
-(def get-in-grammar-node i-grammar/get-in-grammar-node)
-(def update-in-grammar-node i-grammar/update-in-grammar-node)
-(def assoc-in-grammar-node i-grammar/assoc-in-grammar-node)
+(def load-grammar grammar/load-grammar)
+(def get-in-grammar grammar/get-in-grammar)
+(def update-in-grammar grammar/update-in-grammar)
+(def assoc-in-grammar grammar/assoc-in-grammar)
+(def save-weights grammar/save-weights)
 
-(def wtrek i-grammar/wtrek)
-(def path-log-wtrek i-grammar/path-log-wtrek)
+(def wtrek grammar/wtrek)
+(def path-log-wtrek grammar/path-log-wtrek)
 
-(def grammar->generator-func-source i-codegen/grammar->generator-func-source)
-(def grammar->generator-defs-source i-codegen/grammar->generator-defs-source)
+(def grammar->generator-func-source codegen/grammar->generator-func-source)
+(def grammar->generator-defs-source codegen/grammar->generator-defs-source)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generator object/API
@@ -32,9 +33,9 @@
   [{:keys [start] :as ctx} grammar]
   (let [ctx (assoc ctx :function "ephemeral")
         start (or start (:start (meta grammar)))
-        fn-src (i-codegen/grammar->generator-func-source ctx grammar)
-        gen-fn (i-codegen/eval-generator-source fn-src)
-        gen (i-codegen/generator-func->generator gen-fn start (:weights ctx))]
+        fn-src (codegen/grammar->generator-func-source ctx grammar)
+        gen-fn (codegen/eval-generator-source fn-src)
+        gen (codegen/generator-func->generator gen-fn start (:weights ctx))]
     (with-meta
       gen
       {:grammar grammar
@@ -52,7 +53,7 @@
   (let [{:keys [gen-fn ctx cur-start]} (meta obj)
         ctx (assoc ctx :weights (or weights (:weights ctx)))
         start (or start cur-start)
-        gen (i-codegen/generator-func->generator gen-fn start (:weights ctx))]
+        gen (codegen/generator-func->generator gen-fn start (:weights ctx))]
     (with-meta
       gen
       (merge (meta obj)
@@ -73,14 +74,14 @@
    (grammar->generator-obj
      ctx
      (if (not (map? ebnf))
-       (i-grammar/load-grammar ebnf)      ;; Text string or file
+       (grammar/load-grammar ebnf)      ;; Text string or file
        (if (:grammar ebnf)
-         (i-grammar/parser->grammar ebnf) ;; Parser
+         (grammar/parser->grammar ebnf) ;; Parser
          ebnf)))))                      ;; Assume grammar
 
 
 (comment
-  (println (grammar->generator-function-source {} (i-grammar/load-grammar (slurp "test/recur3.ebnf"))))
+  (println (grammar->generator-function-source {} (grammar/load-grammar (slurp "test/recur3.ebnf"))))
 
   (def ebnf-generator (ebnf->gen (slurp "test/recur3.ebnf")))
   (pprint (gen/sample ebnf-generator 10))
@@ -104,34 +105,14 @@
   (assert (:namespace ctx) ":namespace required in ctx")
   (str (clj-prefix (:namespace ctx))
        (if (:function ctx)
-         (i-codegen/grammar->generator-func-source ctx grammar)
-         (i-codegen/grammar->generator-defs-source ctx grammar))))
+         (codegen/grammar->generator-func-source ctx grammar)
+         (codegen/grammar->generator-defs-source ctx grammar))))
 
 (comment
-  (def ebnf-grammar (i-grammar/load-grammar (slurp "test/recur1.ebnf")))
+  (def ebnf-grammar (grammar/load-grammar (slurp "test/recur1.ebnf")))
   (spit "joel/gen.clj" (grammar->ns {:namespace "joel.gen"}
                                     ebnf-grammar))
 )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Test execution and parsing utilties
-
-(defn run-check
-  "Run quick-check against a generator (gen-to-check) using a check
-  function (check-fn) and reporter functon (report-fn). Execution
-  options (opts) supported are :iterations (default: 10), :max-size
-  (default: 200), and :seed."
-  [opts gen-to-check check-fn report-fn]
-  (let [{:keys [iterations seed max-size]
-	 :or {iterations 10
-	      ;;seed 1
-	      max-size 200
-	      }} opts
-	p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
-    (clojure.test.check/quick-check iterations p
-				    :seed seed
-				    :max-size max-size
-				    :reporter-fn report-fn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Better instaparse errors
@@ -174,9 +155,36 @@
                        :location location}))
       res)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Misc
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Parsing
 
-(defn save-weights [path weights]
-    (spit path (with-out-str (pprint (into (sorted-map) weights)))))
+(defn parse-weights [parser texts]
+  (let [grammar (grammar/parser->grammar parser)
+        texts (if (string? texts) [texts] texts)
+        parsed (map #(parse parser %) texts)]
+    (apply merge-with +
+           (map #(grammar/path-log-wtrek grammar %) parsed))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Test execution
+
+(defn quick-check
+  "Run quick-check against a generator (gen-to-check) using a check
+  function (check-fn) and reporter functon (report-fn). Execution
+  options (opts) supported are :iterations (default: 10), :max-size
+  (default: 200), and :seed."
+  [opts gen-to-check check-fn report-fn]
+  (let [{:keys [iterations seed max-size]
+	 :or {iterations 10
+	      ;;seed 1
+	      max-size 200
+	      }} opts
+	p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
+    (clojure.test.check/quick-check iterations p
+				    :seed seed
+				    :max-size max-size
+				    :reporter-fn report-fn)))
+
+;; TODO: simpler ease function (defn check [check-fn ebnf & [opts]] ...)
 

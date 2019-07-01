@@ -138,7 +138,7 @@
   across all the texts from text-objs."
   [parser text-objs]
   (let [grammar (grammar/parser->grammar parser)
-        weights (grammar/grammar->weights grammar)
+        weights (grammar/wtrek grammar)
         zero-weights (into {} (for [[k v] weights] [k 0]))
         ;; Parse each text string
         results (for [{:keys [text location]} text-objs]
@@ -209,7 +209,7 @@
                     (when (not (= @cur-state (:type r)))
                       (reset! cur-state (:type r))
                       (pr-err (str "NEW STATE: " (name (:type r))))))
-        res (core/run-check opts generator check-fn report-fn)]
+        res (core/quick-check opts generator check-fn report-fn)]
     res))
 
 (defn do-check

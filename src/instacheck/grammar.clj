@@ -1,5 +1,7 @@
 (ns instacheck.grammar
-  (:require [clojure.walk :refer [postwalk]]
+  (:require [clojure.java.io :as io]
+            [clojure.pprint :refer [pprint]]
+            [clojure.walk :refer [postwalk]]
             [instacheck.util :as util]
             [instaparse.core :as instaparse]))
 
@@ -39,7 +41,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; grammar functions
 
-(defn get-in-grammar-node
+(defn get-in-grammar
   "Get the a grammar node for the given path in grammar. Nil is
   returned if the path does not exist in the grammar, the tag type
   along the path don't match, or the numeric parser index is
@@ -73,7 +75,7 @@
 	:else
 	nil))))
 
-(defn- update-in-grammar-node*
+(defn- update-in-grammar*
   "Internal: walk a grammar rule tree applying tx at each path/node"
   [targ-path path node f args]
   (let [tag (:tag node)]
@@ -85,48 +87,48 @@
       (:parsers node)
       (assoc node
              :parsers (map-indexed
-                        #(update-in-grammar-node*
+                        #(update-in-grammar*
                            targ-path (conj path tag %1) %2 f args)
                         (:parsers node)))
       ;; :ord
       (:parser2 node)
       (assoc node
-             :parser1 (update-in-grammar-node*
+             :parser1 (update-in-grammar*
                         targ-path (conj path tag 0) (:parser1 node) f args)
-             :parser2 (update-in-grammar-node*
+             :parser2 (update-in-grammar*
                         targ-path (conj path tag 1) (:parser2 node) f args))
 
       ;; :opt, :star, :plus
       (:parser node)
       (assoc node
-             :parser (update-in-grammar-node*
+             :parser (update-in-grammar*
                        targ-path (conj path tag 0) (:parser node) f args))
 
       ;; :nt, :string, :regexp, :epsilon
       :else
       node)))
 
-(defn update-in-grammar-node
+(defn update-in-grammar
   "Update a grammar node at the given path in the grammar by running
   (apply f node args) on the node and returning the update grammar.
   Like update-in for grammars."
   [grammar [rule-kw & rest-path :as path] f & args]
   (assoc grammar
          rule-kw
-         (update-in-grammar-node*
+         (update-in-grammar*
            rest-path [] (get grammar rule-kw) f args)))
 
-(defn assoc-in-grammar-node
+(defn assoc-in-grammar
   "Update a grammar node at the given path in grammar to a new value.
   Like assoc-in for grammars."
   [grammar path value]
-  (update-in-grammar-node grammar path (fn [n] value)))
+  (update-in-grammar grammar path (fn [n] value)))
 
 (defn children-of-node
   "Given a grammar and path node within that grammar return the paths
   of the children (:alt, :ord, and :cat nodes)."
   [grammar node-path]
-  (let [node (get-in-grammar-node grammar node-path)
+  (let [node (get-in-grammar grammar node-path)
         base-path (if (number? (last node-path))
                     (conj node-path (:tag node))
                     node-path)
@@ -319,12 +321,12 @@
       {}
       trek)))
 
-(defn wtrek
-  "Return an wtrek/weight trek (map of grammar paths to weight
-  values). Weights will have a weight of default-weight if specified,
-  otherwise 100. Note that this will return different paths than
-  a normal trek because a wtrek contains all weighted nodes (:alt,
-  :ord, :opt, :star) from the grammar not just leaf nodes."
+(defn- wtrek-without-comment-weights*
+  "Internal: Return an wtrek/weight trek (map of grammar paths to
+  weight values). Weights will have a weight of default-weight if
+  specified, otherwise 100. Note that this will return different paths
+  than a normal trek because a wtrek contains all weighted nodes
+  (:alt, :ord, :opt, :star) from the grammar not just leaf nodes."
   [grammar & [default-weight]]
   (let [dw (or default-weight 100)
         full-trek (trek-grammar* grammar (fn [p n] {p 0}))
@@ -335,12 +337,25 @@
     #_(pprint new-trek)
     (filter-trek-weighted new-trek)))
 
+(defn wtrek
+  "Takes a grammar and returns a wtrek/weight trek (map of grammar
+  paths to weight values). If the node at a path has a comment with
+  a :weight specification then this will be used for the weight
+  otherwise the default-weight parameter will be used (with a default
+  of 100). Note that this will return different paths than a normal
+  trek because a wtrek contains all weighted nodes (:alt, :ord, :opt,
+  :star) from the grammar not just leaf nodes."
+  [grammar & [default-weight]]
+  (let [dw (or default-weight 100)]
+    (merge (wtrek-without-comment-weights* grammar dw)
+           (comment-wtrek grammar :weight))))
+
 (defn path-log-trek
   "Takes a grammar and parse-result parsed using that grammar and
   returns a path-log trek based on the :path-log in parse-result. Note
-  that this will return a different set of paths than a normal trek
-  because it contains all nodes of the grammar from the grammar not
-  just leaf nodes."
+  that this will return a different set of paths than a normal trek or
+  wtrek because it contains \"weights\" for all nodes of the grammar
+  and not just for leaf or weighted nodes."
   [grammar parse-result]
   (let [weights (-> parse-result meta :path-log frequencies)
         full-trek (trek-grammar* grammar (fn [p n] {p 0}))
@@ -388,14 +403,13 @@
   [grammar parse-result]
   (filter-trek-weighted (path-log-trek grammar parse-result)))
 
-(defn grammar->weights
-  "Takes a grammar and returns a wtrek/weight trek (map of grammar
-  paths to weight values). If the node at a path has a comment with
-  a :weight specification then this will be used for the weight
-  otherwise the default-weight parameter will be used (with a default
-  of 100)."
-  [grammar & [default-weight]]
-  (let [dw (or default-weight 100)]
-    (merge (wtrek grammar dw)
-           (comment-wtrek grammar :weight))))
+;; Misc
+
+(defn print-weights [path weights]
+  (let [sm (sorted-map-by #(compare (str %1) (str %2)))]
+    (pprint (into sm weights))))
+
+(defn save-weights [path weights]
+  (io/make-parents path)
+  (spit path (with-out-str (print-weights path weights))))
 

@@ -125,7 +125,7 @@ r1 = 'i' #'[0-9]*'")
           src2 (cg/grammar->generator-func-source ctx2 g5)
           wa1 @(:weights-res ctx1)
           wa2 @(:weights-res ctx2)
-          g5w (g/grammar->weights g5)]
+          g5w (g/wtrek g5)]
       (is (re-seq #"(?s)\(def gen-foobar.*\).*\(def gen-start.*\)"
                   src1))
       (is (re-seq #"(?s)\(assoc g :foobar gen-foobar\).*\(assoc g :start gen-start\)"
@@ -174,7 +174,7 @@ r1 = 'i' #'[0-9]*'")
 
   (testing "update a grammar to use built-in :gen/int generator"
     (let [ctx {:function "fname2"}
-          g7-2 (g/assoc-in-grammar-node
+          g7-2 (g/assoc-in-grammar
                  g7 [:r1 :cat 1] {:tag :nt :keyword :gen/nat})
           src (cg/grammar->generator-defs-source ctx g7-2)
           gen @(cg/eval-generator-source src)
