@@ -192,5 +192,32 @@
 				    :max-size max-size
 				    :reporter-fn report-fn)))
 
-;; TODO: simpler ease function (defn check [check-fn ebnf & [opts]] ...)
+(defn instacheck
+  "Instacheck a function with EBNF defined test cases. The check-fn
+  will be called repeatedly with random strings that conform to the
+  ebnf definition. The function should perform a test based on the
+  string and return a nil or false if fails the test or any other
+  value to indicate that it passes the test. If a failure is detected
+  then the shrinking process will performed. The return value is the
+  quick-check return status.
 
+  The optional qc-opts parameter can be used to specify the following
+  quick-check options:
+    - iterations: number of iterations to check before success.
+    - seed:       starting seed for generating test cases
+    - max-size:   maximum size for all internal generators.
+    - report-fn:  function to call with a report after each iteration
+  "
+  [check-fn ebnf & [qc-opts]]
+  (let [gen-to-check (ebnf->gen {} ebnf)
+        {:keys [iterations seed max-size report-fn]
+         :or {iterations 10
+              ;;seed 1
+              max-size 200
+              report-fn (fn [& args] true)
+              }} qc-opts
+        p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
+    (clojure.test.check/quick-check iterations p
+                                    :seed seed
+                                    :max-size max-size
+                                    :reporter-fn report-fn)))

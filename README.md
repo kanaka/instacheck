@@ -22,6 +22,22 @@ Add the following to your Clojure dependencies:
 [kanaka/instacheck "0.7.0"]
 ```
 
+Here is a simple example of using instacheck:
+
+```clojure
+(require '[instacheck.core :refer [instacheck]])
+(def ebnf "root = ('foo' #'[0-9]' ) 'bar' *")
+
+(instacheck.core/check #(<= (count %) 7) ebnf)
+;; a failure will be detected and shrunk
+
+(instacheck.core/check #(<= (count %) 7) ebnf {:report-fn #(prn %)})
+;; a report will be printed for each iteration
+
+(instacheck.core/check #(<= (count %) 7) ebnf {:seed 2})
+;; manual seed for repeatable results 
+```
+
 Here is an example of using instacheck with instaparse and test.check:
 
 ```clojure
@@ -44,21 +60,6 @@ Here is an example of using instacheck with instaparse and test.check:
 (def prop (tc-prop/for-all* [gen] #(<= (count %) 7)))
 ;; Run quick-check for 10 iterations on prop
 (tc/quick-check 10 prop)
-```
-
-Here is an example of using some convenience functions provided by
-instacheck that encapsulate instaparse and test.check functionality:
-
-```clojure
-(require '[instacheck.core :refer [ebnf->gen quick-check]])
-
-(defn checkit [grammar opts]
-  (let [gen (ebnf->gen {} grammar)
-        check-fn #(do (prn :sample %) (<= (count %) 7))
-        report-fn #(prn :report %)]
-    (quick-check opts gen check-fn report-fn)))
-
-(checkit "root = ('foo' #'[0-9]' ) 'bar' *" {:iterations 5})
 ```
 
 
