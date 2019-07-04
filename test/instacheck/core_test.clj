@@ -142,9 +142,38 @@ r1 = 'a' / '<' r1 '>'")
                         (= :r1 (first %)))
                   (map #(core/parse p5 %) samps))))))
 
-(deftest parse-weights-test
-  ;; TODO: parse-weights test
-  )
+(deftest parse-wtreks-test
+ (testing "parse-wtrek/parse-wtreks"
+   (let [p (instacheck.core/load-parser "r1 = 'a' r2*; r2 = 'b' | 'c'")
+         data (core/parse-wtreks p [["a" :t1] ["ab" :t2] ["abbc" :t3]])]
+     (is (= data
+            {:parts
+             [{:id :t1,
+               :parsed [:r1 "a"],
+               :wtrek
+               {[:r1 :cat 1 :star 0] 0,
+                [:r1 :cat 1 :star nil] 1,
+                [:r2 :alt 0] 0,
+                [:r2 :alt 1] 0}}
+              {:id :t2,
+               :parsed [:r1 "a" [:r2 "b"]],
+               :wtrek
+               {[:r1 :cat 1 :star 0] 1,
+                [:r1 :cat 1 :star nil] 0,
+                [:r2 :alt 0] 1,
+                [:r2 :alt 1] 0}}
+              {:id :t3,
+               :parsed [:r1 "a" [:r2 "b"] [:r2 "b"] [:r2 "c"]],
+               :wtrek
+               {[:r1 :cat 1 :star 0] 3,
+                [:r1 :cat 1 :star nil] 2,
+                [:r2 :alt 0] 2,
+                [:r2 :alt 1] 1}}],
+             :full-wtrek
+             {[:r1 :cat 1 :star nil] 3,
+              [:r1 :cat 1 :star 0] 4,
+              [:r2 :alt 0] 3,
+              [:r2 :alt 1] 1}})))))
 
 (deftest quick-check-test
   (testing "quick-check tests"

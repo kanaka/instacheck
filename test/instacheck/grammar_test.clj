@@ -615,5 +615,9 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 2})))))
 
 (deftest print-weights-test
-  ;; TODO: print-weights test
-  )
+  (testing "print-weights test"
+    (is (= (with-out-str
+             (g/print-weights {[:r1 :alt 1] 20
+                               [:r1 :alt 2] 30
+                               [:r1 :alt 0] 10}))
+           "{[:r1 :alt 0] 10, [:r1 :alt 1] 20, [:r1 :alt 2] 30}\n"))))

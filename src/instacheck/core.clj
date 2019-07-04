@@ -164,12 +164,37 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Parsing
 
-(defn parse-weights [parser texts]
+(defn parse-wtrek
+  "Uses parser to parse a text string and returns a map with the
+  parsed tree (:parsed) and a path-log wtrek from the parse (:wtrek).
+  The wtrek weights are set to the number of times each path in the
+  grammar was followed/used to parse the text."
+  [parser text & [id]]
   (let [grammar (grammar/parser->grammar parser)
-        texts (if (string? texts) [texts] texts)
-        parsed (map #(parse parser %) texts)]
-    (apply merge-with +
-           (map #(grammar/path-log-wtrek grammar %) parsed))))
+        parsed (parse parser text)
+        wtrek (grammar/path-log-wtrek grammar parsed)]
+    {:id id
+     :parsed parsed
+     :wtrek wtrek}))
+
+(defn parse-wtreks
+  "Takes a sequence of [text id] pairs and uses parse-wtrek to
+  generator the following structure:
+
+      {:parts [{:id ID
+                :parsed PARSED
+                :wtrek  {PATH WEIGHT ...}}
+                ...]
+       :full  {PATH WEIGHT ...}}
+
+  The :parts value is a vector of the parse-wtrek result for each
+  texts-ids. The :full-wtrek has merged weight counts from all :parts
+  :wtrek values."
+  [parser texts-ids]
+  (let [parts (vec (for [[text id] texts-ids]
+                     (parse-wtrek parser text id)))]
+    {:parts parts
+     :full-wtrek (apply merge-with + (map :wtrek parts))}))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

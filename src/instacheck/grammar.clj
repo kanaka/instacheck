@@ -418,11 +418,11 @@
 
 ;; Misc
 
-(defn print-weights [path weights]
+(defn print-weights [weights]
   (let [sm (sorted-map-by #(compare (str %1) (str %2)))]
     (pprint (into sm weights))))
 
 (defn save-weights [path weights]
   (io/make-parents path)
-  (spit path (with-out-str (print-weights path weights))))
+  (spit path (with-out-str (print-weights weights))))
 

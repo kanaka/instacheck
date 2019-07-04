@@ -92,15 +92,6 @@
                       (format "sample-%04d" suffix)
                       (format "sample-%s" suffix)))))
 
-(defn- print-weights [weights]
-  (pprint (into (sorted-map) (grammar/filter-trek-weighted weights))))
-
-(defn- save-weights [ctx file]
-  (when file
-    (pr-err "Saving weights to" (str file))
-    (spit file (with-out-str (print-weights @(:weights-res ctx))))))
-
-
 ;; do-clj
 
 (defn do-clj
@@ -131,42 +122,21 @@
 
 ;; do-parse
 
-(defn parse-weights
-  "Use parser to parse a sequence of text description objects {:text
-  text :location location}. Returns a weights map with the weights set
-  to the number of times that path in the grammar was followed/used
-  across all the texts from text-objs."
-  [parser text-objs]
-  (let [grammar (grammar/parser->grammar parser)
-        weights (grammar/wtrek grammar)
-        zero-weights (into {} (for [[k v] weights] [k 0]))
-        ;; Parse each text string
-        results (for [{:keys [text location]} text-objs]
-                  (grammar/path-log-wtrek
-                    grammar (core/parse parser text location)))]
-    (reduce merge zero-weights results)))
-
-(defn parse-weights-from-files
-  "Wrapper around parse-weights that marshals the text objects from
-  a list of file paths."
-  [parser files]
-  (parse-weights parser (for [f files] {:text (slurp f) :location f})))
-
 (defn do-parse
   [ctx parser files]
   (when (empty? files)
     (usage ["parse mode requires FILE list"]))
-  (let [weights
-        (try
-          (parse-weights-from-files parser files)
-          (catch Exception e
-            (let [{:keys [text failure location]} (ex-data e)]
-              (println (str "Parse error in '" location "':"))
-              (println failure)
-              (System/exit 1))))]
+  (let [texts-ids (map #(vector (slurp %) %) files)
+        data (try
+               (core/parse-wtreks parser texts-ids)
+               (catch Exception e
+                 (let [{:keys [text failure location]} (ex-data e)]
+                   (println (str "Parse error in '" location "':"))
+                   (println failure)
+                   (System/exit 1))))]
     ;; Update the ctx result weights
-    (reset! (:weights-res ctx) weights)
-    (print-weights weights)))
+    (reset! (:weights-res ctx) (:full-wtrek data))
+    (grammar/print-weights (:full-wtrek data))))
 
 ;; do-check
 
@@ -228,9 +198,11 @@
                       (str (io/file dir (format "%04d" run)))
                       dir)
             res-file (io/file run-dir "result.edn")
+            weights-file (io/file run-dir "weights.edn")
             generator (core/ebnf->gen ctx parser)
             qc-res (check-and-report ctx generator run-dir cmd opts)]
-        (save-weights ctx (io/file run-dir "weights.edn"))
+        (pr-err "Saving weights to" (str weights-file))
+        (grammar/save-weights weights-file @(:weights-res ctx))
         (pr-err "Saving result map to" (str res-file))
         (spit res-file qc-res)
         (println "Result:")
@@ -286,7 +258,8 @@
               (do-check ctx ebnf-parser (first cmd-args) check-cmd
                         (select-keys opts [:runs :iterations])))]
 
-    (save-weights ctx (:weights-output opts))
+    (when-let [weights-output (:weights-output opts)]
+      (grammar/save-weights weights-output @(:weights-res ctx)))
 
     (if (= false res)
       (System/exit 1)
