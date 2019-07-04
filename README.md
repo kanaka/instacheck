@@ -22,20 +22,21 @@ Add the following to your Clojure dependencies:
 [kanaka/instacheck "0.7.2"]
 ```
 
-Here is a simple example of using instacheck:
+Here is a simple example of using instacheck to test a function:
 
 ```clojure
 (require '[instacheck.core :refer [instacheck]])
 (def ebnf "root = ('foo' #'[0-9]' ) 'bar' *")
+(defn func-to-check [test] (<= (count %) 7))
 
-(instacheck.core/check #(<= (count %) 7) ebnf)
 ;; a failure will be detected and shrunk
+(instacheck.core/check func-to-check ebnf)
 
-(instacheck.core/check #(<= (count %) 7) ebnf {:report-fn #(prn %)})
 ;; a report will be printed for each iteration
+(instacheck.core/check func-to-check ebnf {:report-fn #(prn %)})
 
-(instacheck.core/check #(<= (count %) 7) ebnf {:seed 2})
 ;; manual seed for repeatable results 
+(instacheck.core/check func-to-check ebnf {:seed 2})
 ```
 
 Here is an example of using instacheck with instaparse and test.check:
