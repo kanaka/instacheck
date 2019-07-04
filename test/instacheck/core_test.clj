@@ -147,25 +147,56 @@ r1 = 'a' / '<' r1 '>'")
   )
 
 (deftest quick-check-test
-  (testing "quick-check all passing"
-    (let [gen5 (core/ebnf->gen {} g5)
-          log (atom {:samples []
-                     :reports []})
-          check-fn (fn [sample]
-                     (swap! log update-in [:samples] conj sample)
-                     true)
-          report-fn (fn [report]
-                      (swap! log update-in [:reports] conj report))
-          qc-res (core/quick-check {:iterations 5} gen5 check-fn report-fn)]
-      (is (and (= 5 (-> @log :samples count))
-               (= 6 (-> @log :reports count))))))
+  (testing "quick-check tests"
+    (testing "quick-check all passing"
+      (let [gen5 (core/ebnf->gen {} g5)
+            log (atom {:samples []
+                       :reports []})
+            check-fn (fn [sample]
+                       (swap! log update-in [:samples] conj sample)
+                       true)
+            report-fn (fn [report]
+                        (swap! log update-in [:reports] conj report))
+            qc-res (core/quick-check {:iterations 5} gen5 check-fn report-fn)]
+        (is (and (= 5 (-> @log :samples count))
+                 (= 6 (-> @log :reports count))))))
 
-  (testing "quick-check with a simple failure case"
-    (let [gen5 (core/ebnf->gen {} g5)
-          check-fn (fn [sample] (if (re-seq #"<<" sample) false true))
-          report-fn (fn [report] true)
-          qc-res (core/quick-check {:iterations 20} gen5 check-fn report-fn)]
-      ;;(pprint qc-res)
-      (is (get #{"<<0>>" "<<10>>"}
-               (-> qc-res :shrunk :smallest first))))))
+    (testing "quick-check with a simple failure case"
+      (let [gen5 (core/ebnf->gen {} g5)
+            check-fn (fn [sample] (if (re-seq #"<<" sample) false true))
+            report-fn (fn [report] true)
+            qc-res (core/quick-check {:iterations 20} gen5 check-fn report-fn)]
+        ;;(pprint qc-res)
+        (is (get #{"<<0>>" "<<10>>"}
+                 (-> qc-res :shrunk :smallest first)))))))
+
+(deftest instacheck
+  (testing "instacheck tests"
+    (testing "instacheck basics"
+      (let [ebnf "root = ('foo' #'[0-9]' ) 'bar' *"
+            qc-res (core/instacheck #(<= (count %) 7) ebnf)]
+        (is (= false (:result qc-res)))
+        (is (> (-> qc-res :fail first count) 7))
+        (is (:shrunk qc-res))
+        (is (= ["foo0barbar"] (-> qc-res :shrunk :smallest)))))
+
+    (testing "instacheck all passing"
+      (let [log (atom {:samples []
+                       :reports []})
+            check-fn (fn [sample]
+                       (swap! log update-in [:samples] conj sample)
+                       true)
+            report-fn (fn [report]
+                        (swap! log update-in [:reports] conj report))
+            qc-res (core/instacheck check-fn ebnf5 {:iterations 5
+                                                    :report-fn report-fn})]
+        (is (and (= 5 (-> @log :samples count))
+                 (= 6 (-> @log :reports count))))))
+
+    (testing "instacheck with a simple failure case"
+      (let [check-fn (fn [sample] (if (re-seq #"<<" sample) false true))
+            qc-res (core/instacheck check-fn ebnf5 {:iterations 20})]
+        ;;(pprint qc-res)
+        (is (get #{"<<0>>" "<<10>>"}
+                 (-> qc-res :shrunk :smallest first)))))))
 
