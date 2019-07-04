@@ -1,9 +1,9 @@
 (ns instacheck.grammar-test
   (:require [clojure.test :refer [deftest testing is]]
+            [clojure.string :as string]
             [instaparse.core :as instaparse]
             [instacheck.core :as c]
-            [instacheck.grammar :as g]
-            [clojure.pprint :refer [pprint]]))
+            [instacheck.grammar :as g]))
 
 (def ebnf1 "
 start = 'qux' | foobar ;
@@ -54,7 +54,7 @@ r = 'a'+ 'b'* 'c'?")
 (def ebnf9 "
 r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 
-;; grammar loading
+;; grammar loading/conversion
 
 (def g1 (g/load-grammar ebnf1))
 (def g2 (g/load-grammar ebnf2))
@@ -162,6 +162,20 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
         (is (= (instaparse/parser ebnf)
                (g/grammar->parser g :r1)
                (g/grammar->parser (g/trek->grammar tk) :r1)))))))
+
+(deftest grammar->ebnf-test
+  (testing "grammar->ebnf tests"
+    (let [ebnf1 "r1 = \"abc\" | #\"def\""
+          ebnf2 "r1 = \"abc\" | def\ndef = \"def\""]
+      (is (= ebnf1
+             (g/grammar->ebnf '{:r1 {:tag :alt
+                                     :parsers ({:tag :string :string "abc"}
+                                               {:tag :regexp :regexp #"def"})}})))
+      (is (= ebnf1
+             (g/grammar->ebnf (c/load-grammar ebnf1))))
+      (is (= (set (string/split ebnf2 #"\n"))
+             (set (string/split (g/grammar->ebnf
+                                  (c/load-grammar ebnf2)) #"\n")))))))
 
 
 ;; grammar functions

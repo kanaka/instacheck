@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
             [clojure.walk :refer [postwalk]]
+            [clojure.string :as string]
             [instacheck.util :as util]
             [instaparse.core :as instaparse]))
 
@@ -43,6 +44,15 @@
   grammar (via parser->grammar)."
   [ebnf]
   (parser->grammar (instaparse/parser ebnf)))
+
+(defn grammar->ebnf
+  "Takes a grammar and returns the EBNF string equivalent of that
+  grammar."
+  [grammar]
+  (string/join
+    "\n"
+    (for [[rule node] grammar]
+      (instaparse.print/rule->str rule node))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; grammar functions
