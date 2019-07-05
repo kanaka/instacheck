@@ -51,8 +51,19 @@ r3 = 'e' r1+ | r3*
              [:r2 :alt 1] 100,
              [:r1 :cat 1 :star 0 :alt 0] 100})
 
-
 (def ebnf4 "
+r1 = 'a' | r2?
+r2 = 'b' | 'c'")
+
+(def w4-all {[:r1 :alt 0] 100,
+             [:r1 :alt 1] 100,
+             [:r1 :alt 1 :opt nil] 100,
+             [:r1 :alt 1 :opt 0] 100,
+             [:r2 :alt 0] 100,
+             [:r2 :alt 1] 100})
+
+
+(def ebnf5 "
 element = '<h1' (<rS> h1-attr)* '>' (element | 'content')* '</h1>'
         | '<h2' (<rS> h2-attr)* '>' (element | 'content')* '</h2>'
         | '<h3' (<rS> h3-attr)* '>' (element | 'content')* '</h3>'
@@ -62,7 +73,7 @@ h3-attr = 'h3-attr'
 h4-attr = 'h4-attr'
 rS = #'\\s+'")
 
-(def w4 {[:element :alt 0 :cat 1 :star nil] 1
+(def w5 {[:element :alt 0 :cat 1 :star nil] 1
 	 [:element :alt 0 :cat 3 :star 0 :alt 1] 1
 	 [:element :alt 0 :cat 3 :star 0] 1
 	 [:element :alt 0 :cat 3 :star nil] 1
@@ -78,6 +89,7 @@ rS = #'\\s+'")
 (def g2 (g/load-grammar ebnf2))
 (def g3 (g/load-grammar ebnf3))
 (def g4 (g/load-grammar ebnf4))
+(def g5 (g/load-grammar ebnf5))
 
 (deftest reduce-weights-test
   (testing "reduce-weights"
@@ -126,19 +138,39 @@ rS = #'\\s+'")
     (testing "Propagate removal through multiple rule trees with cycles"
       (let [w (merge w3-all {[:r3 :alt 0] 0 [:r3 :alt 1] 0})]
         (is (= (r/reduce-weights g3 w)
-               {:wtrek (merge w {[:r3 :alt 1 :star 0] 0
+               {:wtrek (merge w {[:r3 :alt 1 :star nil] 0
+                                 [:r3 :alt 1 :star 0] 0
                                  [:r2 :alt 2] 0})
                 :removed #{[:r3 :alt 1 :star] [:r3 :alt] [:r3]}})))
       (let [w (merge w3-all {[:r2 :alt 0] 0
                              [:r2 :alt 1] 0
                              [:r2 :alt 2] 0})]
         (is (= (r/reduce-weights g3 w)
-               {:wtrek (merge w {[:r2 :alt 1 :opt 0] 0
+               {:wtrek (merge w {[:r2 :alt 1 :opt nil] 0
+                                 [:r2 :alt 1 :opt 0] 0
                                  [:r1 :cat 1 :star 0 :alt 2] 0})
                 :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]}})))
-      (let [w (merge w3-all {[:r3 :alt 0] 0 [:r3 :alt 1] 0})]
+      ;; Without nil path should not remove r2 nodes
+      (let [w (merge w3-all {[:r2 :alt 0] 0
+                             [:r2 :alt 1 :opt 0] 0
+                             [:r2 :alt 2] 0})]
         (is (= (r/reduce-weights g3 w)
-               {:wtrek (merge w {[:r3 :alt 1 :star 0] 0
+               {:wtrek (merge w {})
+                :removed #{}})))
+      ;; But with nil path should remove r2 nodes as well
+      (let [w (merge w3-all {[:r2 :alt 0] 0
+                             [:r2 :alt 1 :opt nil] 0
+                             [:r2 :alt 1 :opt 0] 0
+                             [:r2 :alt 2] 0})]
+        (is (= (r/reduce-weights g3 w)
+               {:wtrek (merge w {[:r2 :alt 1] 0
+                                 [:r1 :cat 1 :star 0 :alt 2] 0})
+                :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]}})))
+      (let [w (merge w3-all {[:r3 :alt 0] 0
+                             [:r3 :alt 1] 0})]
+        (is (= (r/reduce-weights g3 w)
+               {:wtrek (merge w {[:r3 :alt 1 :star nil] 0
+                                 [:r3 :alt 1 :star 0] 0
                                  [:r2 :alt 2] 0})
                 :removed #{[:r3] [:r3 :alt] [:r3 :alt 1 :star]}})))
       (let [w (merge w3-all {[:r2 :alt 0] 0
@@ -148,10 +180,25 @@ rS = #'\\s+'")
         (is (= (r/reduce-weights g3 w)
                {:wtrek (merge w {[:r1 :cat 1 :star 0 :alt 2] 0
                                  [:r2 :alt 2] 0
+                                 [:r2 :alt 1 :opt nil] 0
                                  [:r2 :alt 1 :opt 0] 0
+                                 [:r3 :alt 1 :star nil] 0
                                  [:r3 :alt 1 :star 0] 0})
                 :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]
-                           [:r3] [:r3 :alt] [:r3 :alt 1 :star]}}))))))
+                           [:r3] [:r3 :alt] [:r3 :alt 1 :star]}}))))
+    (testing "Propagate with nil paths"
+      (let [w (merge w4-all {[:r2 :alt 0] 0})]
+        (is (= (r/reduce-weights g4 w)
+               {:wtrek w
+                :removed #{}})))
+      (let [w (merge w4-all {[:r2 :alt 0] 0
+                             [:r2 :alt 1] 0})]
+        (is (= (r/reduce-weights g4 w)
+               {:wtrek (merge w {[:r1 :alt 1 :opt nil] 0
+                                 [:r1 :alt 1 :opt 0] 0
+                                 [:r1 :alt 1] 0})
+                :removed #{[:r2] [:r2 :alt] [:r1 :alt 1 :opt]}})))
+      )))
 
 
 (deftest reduce-wtrek-with-weights-test
@@ -228,9 +275,18 @@ rS = #'\\s+'")
                  (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0
                                 [:r :cat 1 :opt 0 :alt 1] 0
                                 [:r :cat 1 :opt 0] 0})))
+          (is (= (:removed r) #{[:r :cat 1 :opt 0 :alt]})))
+        (let [r (rw0 w2-all {[:r :cat 1 :opt nil] 1
+                             [:r :cat 1 :opt 0 :alt 0] 1
+                             [:r :cat 1 :opt 0 :alt 1] 1})]
+          (is (= (:wtrek r)
+                 (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0
+                                [:r :cat 1 :opt 0 :alt 1] 0
+                                [:r :cat 1 :opt nil] 0
+                                [:r :cat 1 :opt 0] 0})))
           (is (= (:removed r) #{[:r]
-                                [:r :cat 1 :opt 0 :alt]
-                                [:r :cat 1 :opt]})))))))
+                                [:r :cat 1 :opt]
+                                [:r :cat 1 :opt 0 :alt]})))))))
 
 (defn- ebnf-set
   [grammar]
@@ -239,13 +295,13 @@ rS = #'\\s+'")
 (deftest prune-grammar-test
   (testing "prune-grammar test"
     (testing "empty options -> same grammar"
-      (is (= (r/prune-grammar (with-meta g4 {}) {})
-             g4)))
+      (is (= (r/prune-grammar (with-meta g5 {}) {})
+             g5)))
     (testing "h2-attr start option -> only :h2-attr"
-      (is (= (r/prune-grammar g4 {:start :h2-attr})
+      (is (= (r/prune-grammar g5 {:start :h2-attr})
              {:h2-attr {:tag :string :string "h2-attr"}})))
     (testing "wtrek option -> only :element, :h2-attr, :rS"
-      (is (= (set (keys (r/prune-grammar g4 {:wtrek w4})))
+      (is (= (set (keys (r/prune-grammar g5 {:wtrek w5})))
              #{:element :h2-attr :rS})))
 
   (testing "prune-grammar to ebnf test"
@@ -254,10 +310,10 @@ rS = #'\\s+'")
 element = '<h1' '>' 'content'* '</h1>' | '<h2' (<rS> h2-attr)* '>' 'content'* '</h2>'
 h2-attr = 'h2-attr'
 rS = #'\\s+'"]
-        (is (= (ebnf-set (r/prune-grammar g4 {:wtrek w4}))
+        (is (= (ebnf-set (r/prune-grammar g5 {:wtrek w5}))
                (ebnf-set (g/load-grammar ebnf))))))
 
     (testing "wtrek and h2-attr start option -> only :h2-attr, no :rS"
       (let [ebnf "h2-attr = 'h2-attr'"]
-        (is (= (ebnf-set (r/prune-grammar g4 {:wtrek w4 :start :h2-attr}))
+        (is (= (ebnf-set (r/prune-grammar g5 {:wtrek w5 :start :h2-attr}))
                (ebnf-set (g/load-grammar ebnf)))))))))

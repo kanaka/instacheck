@@ -31,7 +31,7 @@
                                                          (:removed ctx)))
           (update-in [:removed] set/union (set paths-to-nt) #{node-path})))
 
-    (number? (last node-path)) ;; node-path is a child edge to parent
+    (grammar/CHILD-EDGE (last node-path)) ;; node-path is a child edge to parent
     (recur grammar
            (if (grammar/WEIGHTED (last (pop node-path)))
              (update-in ctx [:wtrek] assoc node-path 0)
@@ -107,7 +107,7 @@
                   (recur new-ctx)
                   new-ctx)))]
     {:wtrek   (:wtrek ctx)
-     :removed (set (filter #(not (number? (last %)))
+     :removed (set (filter #(not (grammar/CHILD-EDGE (last %)))
                            (:removed ctx)))}))
 
 (defn reduce-wtrek-with-weights
@@ -139,7 +139,7 @@
   (let [epsilon? #(= :epsilon (:tag %))
         tag (:tag node)]
     (cond
-      (and (number? (last cur-path))
+      (and (grammar/CHILD-EDGE (last cur-path))
            (grammar/WEIGHTED (last (pop cur-path)))
            (contains? #{0 nil} (get wtrek cur-path)))
       {:tag :epsilon}

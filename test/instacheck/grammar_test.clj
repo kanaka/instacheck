@@ -267,11 +267,13 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
     (testing "children of an opt node"
       (is (= (g/children-of-node g8 [:r :cat 2])
              (g/children-of-node g8 [:r :cat 2 :opt])
-             '([:r :cat 2 :opt 0]))))
+             '([:r :cat 2 :opt nil]
+               [:r :cat 2 :opt 0]))))
     (testing "children of a star node"
       (is (= (g/children-of-node g8 [:r :cat 1])
              (g/children-of-node g8 [:r :cat 1 :star])
-             '([:r :cat 1 :star 0]))))
+             '([:r :cat 1 :star nil]
+               [:r :cat 1 :star 0]))))
     (testing "children of a plus node"
       (is (= (g/children-of-node g8 [:r :cat 0])
              (g/children-of-node g8 [:r :cat 0 :plus])
@@ -299,16 +301,20 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
     (is (= (dissoc (g/trek g2) [:re])
            '{[:foo] :bar
              [:bar] "bar"
+             [:star :star nil] ""
              [:star :star 0] "1"
              [:plus :plus 0] "2"
+             [:opt :opt nil] ""
              [:opt :opt 0] "3"
              [:str] "4"
              ;;[:re] #"5"
              [:ep] ""}))
     (is (= (g/trek g4)
            '{[:x1 :cat 0] "a"
+             [:x1 :cat 1 :star nil] ""
              [:x1 :cat 1 :star 0 :alt 0] "b"
              [:x1 :cat 1 :star 0 :alt 1] "c"
+             [:x1 :cat 1 :star 0 :alt 2 :opt nil] ""
              [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 0] "d"
              [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 0] "e"
              [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 1] "f"}))
@@ -379,19 +385,19 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 (deftest paths-to-nt-test
   (testing "paths-to-nt"
     (is (= (g/paths-to-nt g1 :start)
-           nil))
+           #{}))
     (is (= (g/paths-to-nt g1 :foobar)
-           '([:start :alt 1])))
+           #{[:start :alt 1]}))
     (is (= (g/paths-to-nt g1 :noththere)
-           nil))
+           #{}))
     (is (= (g/paths-to-nt g3 :r1)
-           nil))
+           #{}))
     (is (= (g/paths-to-nt g3 :r2)
-           '([:r1 :alt 0])))
+           #{[:r1 :alt 0]}))
     (is (= (g/paths-to-nt g3 :r3)
-           '([:r1 :alt 1]
+           #{[:r1 :alt 1]
              [:r2 :alt 0]
-             [:r2 :alt 1 :cat 1 :plus 0])))))
+             [:r2 :alt 1 :cat 1 :plus 0]}))))
 
 
 ;; weight functions

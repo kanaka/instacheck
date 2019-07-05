@@ -10,6 +10,7 @@
 
 (def LEAF-TAGS #{:nt :string :regexp :epsilon})
 (def WEIGHTED  #{:alt :ord :star :opt})
+(defn CHILD-EDGE [e] (or (nil? e) (number? e)))
 (def NIL-EDGE  #{:star :opt})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -152,17 +153,17 @@
   of the children (:alt, :ord, and :cat nodes)."
   [grammar node-path]
   (let [node (get-in-grammar grammar node-path)
-        base-path (if (number? (last node-path))
+        tag (:tag node)
+        base-path (if (CHILD-EDGE (last node-path))
                     (conj node-path (:tag node))
                     node-path)
         sibs (cond
-               (:parser node)  [(:parser node)]
-               (:parsers node) (:parsers node)
-               (:parser2 node) ((juxt :parser1 :parser2) node)
-               :else [])
-        children-paths (map-indexed (fn [i n]
-                                      (conj base-path i))
-                                    sibs)]
+               (#{:star :opt} tag) [[nil {:tag :epsilon}] [0 (:parser node)]]
+               (:parser node)      [[0 (:parser node)]]
+               (:parsers node)     (map-indexed vector (:parsers node))
+               (:parser2 node)     [[0 (:parser1 node)] [1 (:parser2 node)]]
+               :else               [])
+        children-paths (map (fn [[i n]] (conj base-path i)) sibs)]
     (seq children-paths)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -197,18 +198,28 @@
       (tx path node)
       (cond
         ;; :alt, :cat
-        (:parsers node)  (apply merge (map-indexed
-                                        #(trek-rule* (conj path tag %1) %2 tx)
-                                        (:parsers node)))
-        ;; :ord
-        (:parser2 node)  (merge (trek-rule* (conj path tag 0) (:parser1 node) tx)
-                                (trek-rule* (conj path tag 1) (:parser2 node) tx))
+        (:parsers node)
+        (apply merge (map-indexed
+                       #(trek-rule* (conj path tag %1) %2 tx)
+                       (:parsers node)))
 
-        ;; :opt, :star, :plus
-        (:parser node)   (trek-rule* (conj path tag 0) (:parser node) tx)
+        ;; :ord
+        (:parser2 node)
+        (merge (trek-rule* (conj path tag 0) (:parser1 node) tx)
+               (trek-rule* (conj path tag 1) (:parser2 node) tx))
+
+        ;; :opt, :star
+        (#{:opt :star} tag)
+        (merge (trek-rule* (conj path tag nil) {:tag :epsilon} tx)
+               (trek-rule* (conj path tag 0) (:parser node) tx))
+
+        ;; :plus
+        (:parser node)
+        (trek-rule* (conj path tag 0) (:parser node) tx)
 
         ;; :nt, :string, :regexp, :epsilon
-        :else            nil))))
+        :else
+        nil))))
 
 (defn- trek-grammar*
   "Internal: walk a grammar graph applying tx at each path/node"
@@ -301,9 +312,18 @@
   within the grammar that have nt as a leaf node."
   [grammar nt]
   (let [gs (trek grammar)
-        nt-leafs (filter #(and (keyword? (val %))
-                               (= nt (val %))) gs)]
-    (seq (map key nt-leafs))))
+        base-nt-leafs (filter #(and (keyword? (val %))
+                                    (= nt (val %)))
+                              gs)
+        ;; Add :opt and :star nil paths and convert to set
+        nt-leafs (reduce
+                   (fn [l [p _]]
+                     (if (#{:opt :star} (last (pop p)))
+                       (conj l p (conj (pop p) nil))
+                       (conj l p)))
+                   #{}
+                   base-nt-leafs)]
+    nt-leafs))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
