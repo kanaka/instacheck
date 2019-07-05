@@ -53,7 +53,8 @@
                    :let [path (conj (:path ctx) idx)
                          ctx (assoc ctx :path path)]]
                (str pre "  [" (weight-str ctx) "\n"
-                    (gen-ROUTE ctx t (+ 2 indent)) "]")))
+                    (gen-ROUTE ctx t (+ 2 indent))
+                    "]")))
            "])"))))
 
 (defn- gen-ord
@@ -69,7 +70,8 @@
                  :let [path (conj (:path ctx) idx)
                        ctx (assoc ctx :path path)]]
              (str pre "  [" (weight-str ctx adj) "\n"
-                  (gen-ROUTE ctx t (+ 2 indent)) "]")))
+                  (gen-ROUTE ctx t (+ 2 indent))
+                  "]")))
          "])")))
 
 (defn- gen-star
@@ -79,12 +81,16 @@
     (str pre "(igen/freq [\n"
          (string/join
            "\n"
-           (for [[idx t] [[nil {:tag :epsilon}]
-                          [0 {:tag :plus, :parser (-> tree :parser)}]]
+           (for [[idx ind t] [[nil 2 {:tag :epsilon}]
+                              [0   3 (:parser tree)]]
                  :let [path (conj (:path ctx) idx)
                        ctx (assoc ctx :path path)]]
              (str pre "  [" (weight-str ctx) "\n"
-                  (gen-ROUTE ctx t (+ 2 indent)) "]")))
+                  (if (= 0 idx)
+                    (str pre "    (igen/vector+\n"
+                         (gen-ROUTE ctx t (+ ind indent)) ")")
+                    (gen-ROUTE ctx t (+ ind indent)))
+                  "]")))
          "])")))
 
 (defn- gen-opt
@@ -99,7 +105,8 @@
                  :let [path (conj (:path ctx) idx)
                        ctx (assoc ctx :path path)]]
              (str pre "  [" (weight-str ctx) "\n"
-                  (gen-ROUTE ctx t (+ 2 indent)) "]")))
+                  (gen-ROUTE ctx t (+ 2 indent))
+                  "]")))
          "])")))
 
 (defn- gen-plus

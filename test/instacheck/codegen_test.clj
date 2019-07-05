@@ -50,6 +50,8 @@ r8 = r1*
 r9 = r1?
 r10 = r1+
 r11 = 'a' | r11
+r12 = ( 'a' | 'b' )*
+r13 = ( 'a' | 'b' )?
 ")
 
 (def ebnf7 "
@@ -90,7 +92,9 @@ r1 = 'i' #'[0-9]*'")
              "(igen/freq [\n  [(get w [:r6 :alt 0] 100)\n    gen-r1]\n  [(get w [:r6 :alt 1] 100)\n    gen-r2]])")))
     (testing "ord"
       (is (= (#'cg/gen-rule-body {} :r7 (:r7 g6) 0)
-             "(igen/freq [\n  [101\n    gen-r1]\n  [100\n    gen-r2]])")))
+             "(igen/freq [\n  [101\n    gen-r1]\n  [100\n    gen-r2]])"))
+(is (= (#'cg/gen-rule-body {:weights-lookup? true} :r7 (:r7 g6) 0)
+             "(igen/freq [\n  [(get w [:r7 :ord 0] 101)\n    gen-r1]\n  [(get w [:r7 :ord 1] 100)\n    gen-r2]])")))
     (testing "star"
       (is (= (#'cg/gen-rule-body {} :r8 (:r8 g6) 0)
              "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    (igen/vector+\n      gen-r1)]])"))
@@ -106,7 +110,14 @@ r1 = 'i' #'[0-9]*'")
              "(igen/vector+\n  gen-r1)")))
     (testing "recursion"
       (is (= (#'cg/gen-rule-body {} :r11 (:r11 g6) 0)
-             "(gen/recursive-gen\n  (fn [inner]\n    (igen/freq [\n      [100\n        (gen/return \"a\")]\n      [100\n        inner]]))\n  (gen/return \"a\"))")))))
+             "(gen/recursive-gen\n  (fn [inner]\n    (igen/freq [\n      [100\n        (gen/return \"a\")]\n      [100\n        inner]]))\n  (gen/return \"a\"))")))
+    (testing "alt within star"
+      (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r12 (:r12 g6) 0)
+	     "(igen/freq [\n  [(get w [:r12 :star nil] 100)\n    (gen/return \"\")]\n  [(get w [:r12 :star 0] 100)\n    (igen/vector+\n      (igen/freq [\n        [(get w [:r12 :star 0 :alt 0] 100)\n          (gen/return \"a\")]\n        [(get w [:r12 :star 0 :alt 1] 100)\n          (gen/return \"b\")]]))]])")))
+    (testing "alt within opt"
+      (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r13 (:r13 g6) 0)
+	     "(igen/freq [\n  [(get w [:r13 :opt nil] 100)\n    (gen/return \"\")]\n  [(get w [:r13 :opt 0] 100)\n    (igen/freq [\n      [(get w [:r13 :opt 0 :alt 0] 100)\n        (gen/return \"a\")]\n      [(get w [:r13 :opt 0 :alt 1] 100)\n        (gen/return \"b\")]])]])")))))
+
 
 (deftest check-and-order-rules-test
   (testing "check-and-order-rules"
