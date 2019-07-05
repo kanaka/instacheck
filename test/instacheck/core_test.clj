@@ -175,29 +175,18 @@ r1 = 'a' / '<' r1 '>'")
               [:r2 :alt 0] 3,
               [:r2 :alt 1] 1}})))))
 
-(deftest quick-check-test
-  (testing "quick-check tests"
-    (testing "quick-check all passing"
-      (let [gen5 (core/ebnf->gen {} g5)
-            log (atom {:samples []
-                       :reports []})
-            check-fn (fn [sample]
-                       (swap! log update-in [:samples] conj sample)
-                       true)
-            report-fn (fn [report]
-                        (swap! log update-in [:reports] conj report))
-            qc-res (core/quick-check {:iterations 5} gen5 check-fn report-fn)]
-        (is (and (= 5 (-> @log :samples count))
-                 (= 6 (-> @log :reports count))))))
-
-    (testing "quick-check with a simple failure case"
-      (let [gen5 (core/ebnf->gen {} g5)
-            check-fn (fn [sample] (if (re-seq #"<<" sample) false true))
-            report-fn (fn [report] true)
-            qc-res (core/quick-check {:iterations 20} gen5 check-fn report-fn)]
-        ;;(pprint qc-res)
-        (is (get #{"<<0>>" "<<10>>"}
-                 (-> qc-res :shrunk :smallest first)))))))
+(deftest ebnf-sample-seq-test
+  (testing "ebnf-sample-seq test"
+    (testing "alt within opt"
+      (let [samps (take 20 (core/ebnf-sample-seq
+                             "r1 = ('a' | 'b' )?"
+                             {:weights {[:r1 :opt 0 :alt 1] 0}}))]
+        (is (every? #(re-seq #"a*" %) samps))))
+    (testing "alt within star"
+      (let [samps (take 20 (core/ebnf-sample-seq
+                             "r1 = ('a' | 'b' )*"
+                             {:weights {[:r1 :star 0 :alt 0] 0}}))]
+        (is (every? #(re-seq #"b*" %) samps))))))
 
 (deftest instacheck
   (testing "instacheck tests"

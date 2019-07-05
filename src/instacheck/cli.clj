@@ -179,7 +179,8 @@
                     (when (not (= @cur-state (:type r)))
                       (reset! cur-state (:type r))
                       (pr-err (str "NEW STATE: " (name (:type r))))))
-        res (core/quick-check opts generator check-fn report-fn)]
+        qc-opts (merge opts {:report-fn report-fn})
+        res (core/instacheck check-fn generator qc-opts)]
     res))
 
 (defn do-check

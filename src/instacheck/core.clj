@@ -65,7 +65,7 @@
               :cur-generator gen}))))
 
 (defn ebnf->gen
-  "Takes an EBNF grammar, parser, file, or text string and returns
+  "Takes an EBNF text string, grammar, parser, or file and returns
   a test.check generator. If the start is specified then this the name
   of the rule to use as the starting rule of the grmmar. If start is
   not specified then the first rule in the grammar file is used as the
@@ -81,7 +81,6 @@
        (if (:grammar ebnf)
          (grammar/parser->grammar ebnf) ;; Parser
          ebnf)))))                      ;; Assume grammar
-
 
 (comment
   (println (grammar->generator-function-source {} (grammar/load-grammar (slurp "test/recur3.ebnf"))))
@@ -198,43 +197,40 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Test execution
+;; Sample generator and test execution
 
-(defn quick-check
-  "Run quick-check against a generator (gen-to-check) using a check
-  function (check-fn) and reporter functon (report-fn). Execution
-  options (opts) supported are :iterations (default: 10), :max-size
-  (default: 200), and :seed."
-  [opts gen-to-check check-fn report-fn]
-  (let [{:keys [iterations seed max-size]
-	 :or {iterations 10
-	      ;;seed 1
-	      max-size 200
-	      }} opts
-	p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
-    (clojure.test.check/quick-check iterations p
-				    :seed seed
-				    :max-size max-size
-				    :reporter-fn report-fn)))
+(defn ebnf-sample-seq
+  "Returns an infinite sequence of generated values based on the ebnf
+  definition."
+  [ebnf & [opts]]
+  (let [{:keys [weights max-size]} opts
+        gen (ebnf->gen {:weights weights} ebnf)]
+    (if max-size
+      (gen/sample-seq gen max-size)
+      (gen/sample-seq gen))))
 
 (defn instacheck
-  "Instacheck a function with EBNF defined test cases. The check-fn
-  will be called repeatedly with random strings that conform to the
-  ebnf definition. The function should perform a test based on the
-  string and return a nil or false if fails the test or any other
-  value to indicate that it passes the test. If a failure is detected
-  then the shrinking process will performed. The return value is the
-  quick-check return status.
+  "Instacheck a function with randomly generated test cases. The
+  check-fn will be called repeatedly with random strings that are
+  generated based on the ebnf-or-gen. The ebnf-or-gen parameter is
+  either something that ebnf->gen can turn into a generator (EBNF
+  string, grammar, parser) or a plain test.check generator. The
+  check-fn should perform a test based on the string and return a nil
+  or false if fails the test or any other value to indicate that it
+  passes the test. If a failure is detected then the shrinking process
+  will performed. The return value is the quick-check return status.
 
   The optional qc-opts parameter can be used to specify the following
   quick-check options:
-    - iterations: number of iterations to check before success.
+    - iterations: number of iterations to check before success (default: 10)
+    - max-size:   maximum size for all internal generators (default: 200)
     - seed:       starting seed for generating test cases
-    - max-size:   maximum size for all internal generators.
-    - report-fn:  function to call with a report after each iteration
-  "
-  [check-fn ebnf & [qc-opts]]
-  (let [gen-to-check (ebnf->gen {} ebnf)
+    - report-fn:  function to call with a report after each iteration"
+  [check-fn ebnf-or-gen & [qc-opts]]
+  (let [gen-to-check (if (= (type ebnf-or-gen)
+                            clojure.test.check.generators.Generator)
+                       ebnf-or-gen
+                       (ebnf->gen {} ebnf-or-gen))
         {:keys [iterations seed max-size report-fn]
          :or {iterations 10
               ;;seed 1

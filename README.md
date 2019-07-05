@@ -27,16 +27,16 @@ Here is a simple example of using instacheck to test a function:
 ```clojure
 (require '[instacheck.core :refer [instacheck]])
 (def ebnf "root = ('foo' #'[0-9]' ) 'bar' *")
-(defn func-to-check [test] (<= (count %) 7))
+(defn func-to-check [test] (<= (count test) 7))
 
 ;; a failure will be detected and shrunk
-(instacheck.core/check func-to-check ebnf)
+(instacheck func-to-check ebnf)
 
 ;; a report will be printed for each iteration
-(instacheck.core/check func-to-check ebnf {:report-fn #(prn %)})
+(instacheck func-to-check ebnf {:report-fn #(prn %)})
 
 ;; manual seed for repeatable results 
-(instacheck.core/check func-to-check ebnf {:seed 2})
+(instacheck func-to-check ebnf {:seed 2})
 ```
 
 Here is an example of using instacheck with instaparse and test.check:
@@ -51,15 +51,18 @@ Here is an example of using instacheck with instaparse and test.check:
 ;; parser is a regular instaparse parser
 (def parser (instaparse/parser "root = ('foo' #'[0-9]' ) 'bar' *"))
 
+;; Generate some samples using ebnf-sample-seq from instacheck
+(take 20 (instacheck/ebnf-sample-seq parser))
+
 ;; gen is a regular test.check generator based on the parser
 (def gen (instacheck/ebnf->gen {} parser))
 
-;; Generate some samples
+;; Generate some samples using sample-gen from test.check
 (tc-gen/sample gen)
 
 ;; A test.check input property with gen
 (def prop (tc-prop/for-all* [gen] #(<= (count %) 7)))
-;; Run quick-check for 10 iterations on prop
+;; Run test.check quick-check for 10 iterations on prop
 (tc/quick-check 10 prop)
 ```
 
