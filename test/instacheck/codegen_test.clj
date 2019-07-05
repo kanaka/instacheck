@@ -85,18 +85,22 @@ r1 = 'i' #'[0-9]*'")
              "(gen/tuple\n  gen-r1\n  gen-r2)")))
     (testing "alt"
       (is (= (#'cg/gen-rule-body {} :r6 (:r6 g6) 0)
-             "(igen/freq [\n  [100\n    gen-r1]\n  [100\n    gen-r2]])")))
+             "(igen/freq [\n  [100\n    gen-r1]\n  [100\n    gen-r2]])"))
+      (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r6 (:r6 g6) 0)
+             "(igen/freq [\n  [(get w [:r6 :alt 0] 100)\n    gen-r1]\n  [(get w [:r6 :alt 1] 100)\n    gen-r2]])")))
     (testing "ord"
       (is (= (#'cg/gen-rule-body {} :r7 (:r7 g6) 0)
              "(igen/freq [\n  [101\n    gen-r1]\n  [100\n    gen-r2]])")))
     (testing "star"
       (is (= (#'cg/gen-rule-body {} :r8 (:r8 g6) 0)
-             ;;"(gen/vector\n  gen-r1)"
-             "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    (igen/vector+\n      gen-r1)]])")))
+             "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    (igen/vector+\n      gen-r1)]])"))
+      (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r8 (:r8 g6) 0)
+             "(igen/freq [\n  [(get w [:r8 :star nil] 100)\n    (gen/return \"\")]\n  [(get w [:r8 :star 0] 100)\n    (igen/vector+\n      gen-r1)]])")))
     (testing "opt"
       (is (= (#'cg/gen-rule-body {} :r9 (:r9 g6) 0)
-             ;;"(gen/one-of [\n  (gen/return \"\")\n  gen-r1])"
-             "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    gen-r1]])")))
+             "(igen/freq [\n  [100\n    (gen/return \"\")]\n  [100\n    gen-r1]])"))
+      (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r9 (:r9 g6) 0)
+             "(igen/freq [\n  [(get w [:r9 :opt nil] 100)\n    (gen/return \"\")]\n  [(get w [:r9 :opt 0] 100)\n    gen-r1]])")))
     (testing "plus"
       (is (= (#'cg/gen-rule-body {} :r10 (:r10 g6) 0)
              "(igen/vector+\n  gen-r1)")))
