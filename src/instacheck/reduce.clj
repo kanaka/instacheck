@@ -48,29 +48,37 @@
     :else
     (recur grammar ctx (pop node-path))))
 
-;; Weight reducer functions. Must eventually return 0.
+;; Weight reducer functions. If parsed-weight is zero ignore (return
+;; start-weight). Must eventually return 0.
 (defn reducer-zero
-  "Ignores params. Always returns 0"
+  "If parsed-weight > 0 then returns 0"
   [start-weight parsed-weight]
-  0)
+  (if (= parsed-weight 0)
+    start-weight
+    0))
 
 (defn reducer-half
-  "Ignores parsed-weight. Returns start-weight divided in two and
+  "If parsed-weight > 0 then returns start-weight divided in two and
   rounded down."
   [start-weight parsed-weight]
-  (int (/ start-weight 2)))
+  (if (= parsed-weight 0)
+    start-weight
+    (int (/ start-weight 2))))
 
 (defn reducer-ladder
-  "Ignores parsed-weight. Returns the next weight in seq-ladder that
-  is lower than start-weight. Designed to be used as a partial like this:
-    (partial reducer-ladder [30 10 3 1])
+  "If parsed-weight > 0 then returns the next weight in seq-ladder
+  that is lower than start-weight. Designed to be used as a partial
+  like this:
+      (partial reducer-ladder [30 10 3 1])
   The values in the ladder will be sorted in descending order and an
   implicit zero is added to the end."
   [seq-ladder start-weight parsed-weight]
-  (let [norm-ladder (-> seq-ladder set (conj 0) sort reverse)]
-    (or (some #(if (< % start-weight) % nil) norm-ladder) 0)))
+  (if (= parsed-weight 0)
+    start-weight
+    (let [norm-ladder (-> seq-ladder set (conj 0) sort reverse)]
+      (or (some #(if (< % start-weight) % nil) norm-ladder) 0))))
 
-(defn reduce-weights
+(defn reduce-wtrek
   "Takes a grammar and wtrek and returns a context map with a :wtrek
   map and a :removed set that describe the removed edges and nodes
   respectively. Any zero weights in the :wtrek map represent a node
@@ -110,25 +118,62 @@
      :removed (set (filter #(not (grammar/CHILD-EDGE (last %)))
                            (:removed ctx)))}))
 
+;; TODO: if nil path points to current rule nt (recursive) we can't
+;; reduce nil path to 0 or will have infinite recursion.
+
 (defn reduce-wtrek-with-weights
-  "Takes a wtrek, a weights-to-reduce map and a reducer-fn. For each
-  path in weights-to-reduce, the reducer-fn is called with the weights
-  for that path from wtrek and weights-to-reduce respectively. Based
-  on those two values the reducer-fn should return a new value to be
-  updated in the wtrek.
+  "Takes a grammar, wtrek, a weights-to-reduce map, a reduce-mode
+  keyword, and a reducer-fn. A path from weights-to-reduce is selected
+  based on reduce-mode (and grammar). For that path the reducer-fn is
+  called with the weight for the path from wtrek and the weight for
+  the path from weights-to-reduce. Based on those two values the
+  reducer-fn should return a new value to be updated in the wtrek.
+
+  reduce-mode values:
+    :all  - every path in weights-to-reduce is reduced.
+    :leaf - one deepest and highest weight terminal path is reduced.
+    :path - similar to leaf but if parent has greater weight, it will
+            be reduced to the child level, otherwise child is reduced.
 
   Typically the output from this will then be used with the
-  reduce-weights function to propogate any nodes removed by the
+  reduce-wtrek function to propogate any nodes removed by the
   reduction process:
-    (reduce-weights grammar (reduce-wtrek-with-weights
-                              wtrek weights-to-reduce reducer-fn))"
-  [wtrek weights-to-reduce reducer-fn]
-  (let [reduced-weights (reduce (fn [a [p rw]]
-                                  (let [sw (get wtrek p)]
-                                    (assoc a p (reducer-fn sw rw))))
-                                {}
-                                weights-to-reduce)]
-    (merge wtrek reduced-weights)))
+    (reduce-wtrek
+      grammar
+      (reduce-wtrek-with-weights
+        grammar wtrek weights-to-reduce :simple reducer-fn))"
+  [grammar wtrek weights-to-reduce reduce-mode reducer-fn]
+  (condp = reduce-mode
+    :all
+    (let [red (reduce (fn [a [p rw]]
+                        (let [sw (get wtrek p)]
+                          (assoc a p (reducer-fn sw rw))))
+                      {}
+                      weights-to-reduce)]
+      (merge wtrek red))
+
+    :leaf
+    (let [heavy? #(and % (> % 0))
+;;          px #(do (prn %1) (pprint %2) %3)
+          rpath (as-> (grammar/trek grammar) x
+                  (filter #(grammar/TERMINAL (val %)) x) ;; terminals
+                  (keys x) ;; terminal paths
+                  (filter #(and (heavy? (get weights-to-reduce %))
+                                (heavy? (get wtrek %))) x) ;; non-zero
+                  ;; TODO: better overall grammar depth measure rather
+                  ;; than single rule depth (count path)
+                  (sort-by (juxt count #(or (get wtrek %) 0)) x)
+;;                  (px :sorted-paths (vec (map (juxt identity count #(or (get wtrek %) 0)) x)) x)
+                  (last x))
+          ]
+;;      (prn :rpath rpath (get wtrek rpath) (get weights-to-reduce rpath))
+      (assoc wtrek rpath (reducer-fn
+                           (get wtrek rpath)
+                           (get weights-to-reduce rpath))))
+
+
+    ;;:path
+    ))
 
 ;; ---
 

@@ -91,14 +91,14 @@ rS = #'\\s+'")
 (def g4 (g/load-grammar ebnf4))
 (def g5 (g/load-grammar ebnf5))
 
-(deftest reduce-weights-test
-  (testing "reduce-weights"
+(deftest reduce-wtrek-test
+  (testing "reduce-wtrek"
     (testing "remove propagates"
       (let [p (g/load-parser "r1 = 'a' r2; r2 = 'b' | 'c'")
             g (g/parser->grammar p)
             w {[:r2 :alt 0] 0
                [:r2 :alt 1] 0}]
-        (= (r/reduce-weights g w)
+        (= (r/reduce-wtrek g w)
            {:wtrek w,
             :removed #{[:r2] [:r1] [:r2 :alt]}})))
     (testing "remove rule pointing directly to an nt"
@@ -106,20 +106,20 @@ rS = #'\\s+'")
             g (g/parser->grammar p)
             w {[:r2 :alt 0] 0
                [:r2 :alt 1] 0}]
-        (= (r/reduce-weights g w)
+        (= (r/reduce-wtrek g w)
            {:wtrek w
             :removed #{[:r2] [:r1] [:r2 :alt]}})))
     (testing "propagate through root NT"
       (let [w (merge w1-all {[:foobar :alt 0] 0
                              [:foobar :alt 1] 0})]
-        (is (= (r/reduce-weights g1 w)
+        (is (= (r/reduce-wtrek g1 w)
                {:wtrek (merge w {[:start :alt 1] 0}),
                 :removed #{[:foobar :alt] [:foobar]}}))))
     (testing "propagate through intermediate parents and root NT"
       (let [w (merge w1-all {[:foobar :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 1] 0})]
-        (is (= (r/reduce-weights g1 w)
+        (is (= (r/reduce-wtrek g1 w)
                {:wtrek (merge w {[:foobar :alt 1] 0
                                  [:start :alt 1] 0})
                 :removed #{[:foobar :alt] [:foobar]
@@ -129,7 +129,7 @@ rS = #'\\s+'")
                              [:foobar :alt 1 :cat 1 :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 1] 0
                              [:start :alt 0] 0})]
-        (is (= (r/reduce-weights g1 w)
+        (is (= (r/reduce-wtrek g1 w)
                {:wtrek (merge w {[:foobar :alt 1] 0
                                  [:start :alt 1] 0})
                 :removed #{[:foobar :alt] [:foobar]
@@ -137,7 +137,7 @@ rS = #'\\s+'")
                            [:start] [:start :alt]}}))))
     (testing "Propagate removal through multiple rule trees with cycles"
       (let [w (merge w3-all {[:r3 :alt 0] 0 [:r3 :alt 1] 0})]
-        (is (= (r/reduce-weights g3 w)
+        (is (= (r/reduce-wtrek g3 w)
                {:wtrek (merge w {[:r3 :alt 1 :star nil] 0
                                  [:r3 :alt 1 :star 0] 0
                                  [:r2 :alt 2] 0})
@@ -145,7 +145,7 @@ rS = #'\\s+'")
       (let [w (merge w3-all {[:r2 :alt 0] 0
                              [:r2 :alt 1] 0
                              [:r2 :alt 2] 0})]
-        (is (= (r/reduce-weights g3 w)
+        (is (= (r/reduce-wtrek g3 w)
                {:wtrek (merge w {[:r2 :alt 1 :opt nil] 0
                                  [:r2 :alt 1 :opt 0] 0
                                  [:r1 :cat 1 :star 0 :alt 2] 0})
@@ -154,7 +154,7 @@ rS = #'\\s+'")
       (let [w (merge w3-all {[:r2 :alt 0] 0
                              [:r2 :alt 1 :opt 0] 0
                              [:r2 :alt 2] 0})]
-        (is (= (r/reduce-weights g3 w)
+        (is (= (r/reduce-wtrek g3 w)
                {:wtrek (merge w {})
                 :removed #{}})))
       ;; But with nil path should remove r2 nodes as well
@@ -162,13 +162,13 @@ rS = #'\\s+'")
                              [:r2 :alt 1 :opt nil] 0
                              [:r2 :alt 1 :opt 0] 0
                              [:r2 :alt 2] 0})]
-        (is (= (r/reduce-weights g3 w)
+        (is (= (r/reduce-wtrek g3 w)
                {:wtrek (merge w {[:r2 :alt 1] 0
                                  [:r1 :cat 1 :star 0 :alt 2] 0})
                 :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]}})))
       (let [w (merge w3-all {[:r3 :alt 0] 0
                              [:r3 :alt 1] 0})]
-        (is (= (r/reduce-weights g3 w)
+        (is (= (r/reduce-wtrek g3 w)
                {:wtrek (merge w {[:r3 :alt 1 :star nil] 0
                                  [:r3 :alt 1 :star 0] 0
                                  [:r2 :alt 2] 0})
@@ -177,7 +177,7 @@ rS = #'\\s+'")
                              [:r2 :alt 1] 0
                              [:r3 :alt 0] 0
                              [:r3 :alt 1] 0})]
-        (is (= (r/reduce-weights g3 w)
+        (is (= (r/reduce-wtrek g3 w)
                {:wtrek (merge w {[:r1 :cat 1 :star 0 :alt 2] 0
                                  [:r2 :alt 2] 0
                                  [:r2 :alt 1 :opt nil] 0
@@ -188,12 +188,12 @@ rS = #'\\s+'")
                            [:r3] [:r3 :alt] [:r3 :alt 1 :star]}}))))
     (testing "Propagate with nil paths"
       (let [w (merge w4-all {[:r2 :alt 0] 0})]
-        (is (= (r/reduce-weights g4 w)
+        (is (= (r/reduce-wtrek g4 w)
                {:wtrek w
                 :removed #{}})))
       (let [w (merge w4-all {[:r2 :alt 0] 0
                              [:r2 :alt 1] 0})]
-        (is (= (r/reduce-weights g4 w)
+        (is (= (r/reduce-wtrek g4 w)
                {:wtrek (merge w {[:r1 :alt 1 :opt nil] 0
                                  [:r1 :alt 1 :opt 0] 0
                                  [:r1 :alt 1] 0})
@@ -203,15 +203,15 @@ rS = #'\\s+'")
 
 (deftest reduce-wtrek-with-weights-test
   (testing "reduce-wtrek-with-weights on :alts"
-    (let [rwh #(r/reduce-weights
+    (let [rwh #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      %1 %2 r/reducer-half))
-          rwl #(r/reduce-weights
+                      g1 %1 %2 :all r/reducer-half))
+          rwl #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      %1 %2 (partial r/reducer-ladder [30 10 3 1])))
-          rw0 #(r/reduce-weights
+                      g1 %1 %2 :all (partial r/reducer-ladder [30 10 3 1])))
+          rw0 #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      %1 %2 r/reducer-zero))]
+                      g1 %1 %2 :all r/reducer-zero))]
       (testing "[:foobar :alt 0] reduced by half"
         (let [r (rwh w1-all {[:foobar :alt 0] 1})]
           (is (= (:wtrek r)
@@ -260,9 +260,9 @@ rS = #'\\s+'")
           (is (= (:removed r) #{[:foobar] [:foobar :alt]}))))))
 
   (testing "reduce-wtrek-with-weights of :alt, :opt, :star nodes"
-    (let [rw0 #(r/reduce-weights
+    (let [rw0 #(r/reduce-wtrek
                  g2 (r/reduce-wtrek-with-weights
-                      %1 %2 r/reducer-zero))]
+                      g2 %1 %2 :all r/reducer-zero))]
       (testing "[:r :cat 1 :opt 0 :alt 0] is 0"
         (let [r (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1})]
           (is (= (:wtrek r)

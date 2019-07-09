@@ -12,6 +12,8 @@
 (def WEIGHTED  #{:alt :ord :star :opt})
 (defn CHILD-EDGE [e] (or (nil? e) (number? e)))
 (def NIL-EDGE  #{:star :opt})
+(defn TERMINAL [v] (or (string? v)
+                       (instance? java.util.regex.Pattern v)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; grammar loading/conversion functions
