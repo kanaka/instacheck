@@ -2,11 +2,13 @@
   (:require [clojure.test.check.generators :as gen]))
 
 (defn freq
-  "Version of standard frequency generator with the the weights sorted
-  so that shrinking is to the higher weights first and then the earlier
-  weights among those that are equal. To support removal of generator
-  branches via weights this version also allows all the weights to be
-  zero and will throw at runtime rather than a definition time."
+  "Alternate version of standard frequency generator with the the
+  weights sorted so that shrinking is to the higher weights first and
+  then the earlier weights among those that are equal (Clojure sort is
+  stable and will not re-order equal elements). To support removal of
+  generator branches via weights this version also allows all the
+  weights to be zero and will throw at runtime rather than
+  a definition time."
   [pairs]
   (if (= 0 (reduce + (map first pairs)))
     (gen/fmap

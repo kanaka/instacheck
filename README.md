@@ -14,7 +14,7 @@ This will run `./prog` with larger and larger sample files (stored in
 smaller and smaller versions of the failure case until it finds the
 smallest version that still fails.
 
-## Library / REPL Usage
+## Library / REPL QuickStart
 
 Add the following to your Clojure dependencies:
 
@@ -27,17 +27,40 @@ Here is a simple example of using instacheck to test a function:
 ```clojure
 (require '[instacheck.core :refer [instacheck]])
 (def ebnf "root = ('foo' #'[0-9]' ) 'bar' *")
-(defn func-to-check [test] (<= (count test) 7))
+(defn check-func [test-case] (<= (count test-case) 7))
 
 ;; a failure will be detected and shrunk
-(instacheck func-to-check ebnf)
+(instacheck check-func ebnf)
 
 ;; a report will be printed for each iteration
-(instacheck func-to-check ebnf {:report-fn #(prn %)})
+(instacheck check-func ebnf {:report-fn #(prn %)})
 
 ;; manual seed for repeatable results 
-(instacheck func-to-check ebnf {:seed 2})
+(instacheck check-func ebnf {:seed 2})
 ```
+
+In practice your check-fn will be a wrapper function that calls the
+the function you are testing and then verifies it's behavior. One
+common case is where you have some kind of "test oracle" that verifies
+the behavior/output of the function you are testing:
+
+```clojure
+(defn check-func [test-case]
+  (let [res (func-to-test test-case)]
+    (oracle-func test-case res)))
+```
+
+Another common case is where a test failure manifests as an exception:
+
+```clojure
+(defn check-func [test-case]
+  (try
+    (func-to-test test-case)
+    true
+    (catch Throwable t
+      false)))
+```
+
 
 Here is an example of using instacheck with instaparse and test.check:
 
