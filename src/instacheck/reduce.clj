@@ -5,48 +5,86 @@
             [instacheck.grammar :as grammar]
             [instacheck.codegen :as codegen]))
 
+(def memoized-tree-distances
+  (memoize util/tree-distances))
+(def memoized-paths-to-nt
+  (memoize grammar/paths-to-nt))
+(def memoized-trek
+  (memoize grammar/trek))
+
 ;; ---
 
-(defn- parent-search
-  "Internal: Takes a grammar, context ctx (:wtrek, :remove, :removed)
-  and node-path and returns an updated context by searching for the
-  nearest weighted parent node or nearest parent root :nt of this
-  grammar rule tree (i.e. the root NT of this rule/production):
-    - weighted parent node: the parent node's child edge leading back
-      to the node-path has its weight in (:wtrek ctx) zero'd out. If
-      all sibling weights are zero then the parent node is added to
-      (:remove ctx).
-    - root NT: the root NT keyword is added to (:remove ctx) which is
-      then used by propagate-removes to find all grammar leaf nodes
-      ending with NT keyword from which the parent-search will be
-      continued."
-  [grammar ctx node-path]
-  (cond
-    (= 1 (count node-path)) ;; node-path is an nt
-    ;; Expand nt into paths to that nt
-    ;; TODO: memoize call to paths-to-nt
-    (let [paths-to-nt (grammar/paths-to-nt grammar (first node-path))]
-      (-> ctx
-          (update-in [:remove] set/union (set/difference (set paths-to-nt)
-                                                         (:removed ctx)))
-          (update-in [:removed] set/union (set paths-to-nt) #{node-path})))
 
-    (grammar/CHILD-EDGE (last node-path)) ;; node-path is a child edge to parent
-    (recur grammar
-           (if (grammar/WEIGHTED (last (pop node-path)))
-             (update-in ctx [:wtrek] assoc node-path 0)
-             ctx)
-           (pop node-path))
+(defn reduce-wtrek
+  "Takes a grammar and wtrek and returns a new reduced wtrek with all
+  parent weights reduced to their largest child weight (if all child
+  weights are smaller).
 
-    (grammar/WEIGHTED (last node-path)) ;; parent node in rule tree
-    (if (grammar/removed-node? grammar (:wtrek ctx) node-path)
-      (-> ctx
-          (update-in [:remove] set/union #{(pop node-path)})
-          (update-in [:removed] set/union #{node-path}))
-      ctx)
 
-    :else
-    (recur grammar ctx (pop node-path))))
+  Algorithm/Pseudocode:
+    - set pend to contain all weighted nodes in the tree.
+    - while pend:
+      - node   <= pop(pend)
+      - mcw    <= get max child weight
+      - pnodes <= parents(node)
+      - foreach pnode of pnodes:
+        - if pnode child weight towards node > mcw
+          - then:
+            - push(pend, pnode)
+            - wtrek[pnode] <= mcw
+
+  In other words, if all siblings of a node have a weight that is less
+  than parent weight then reduce the parent to the largest sibling
+  weight.
+
+  Any zero weights in the :wtrek map represent a node edge that has
+  been removed. If all edges of a node are 0 then this is represents
+  a node that has been removed. The normal algorithm will propagate
+  this correctly. However, if the propagation of 0 weights reaches the
+  root/start of the grammar and cannot propagate further then an
+  exception is thrown because this represents an invalid weighted
+  grammar; grammar productions could reach the removed node from the
+  root/start rule (a removed node does not even exist in the sense
+  that epsilon does).
+
+  The propagation of node removals continues until there are no more
+  pending node to remove. The call to parent-search may add more nodes
+  to be removed but already removed nodes will not be added again so
+  the process will eventually terminate."
+  [grammar wtrek]
+  (loop [wtrek wtrek
+         pend (set (filter #(grammar/WEIGHTED (last %))
+                           (map (comp pop key) wtrek)))]
+    (if (seq pend)
+      (let [[node & pend-left] pend
+            kids (grammar/children-of-node grammar node)
+            kid-weights (vals (select-keys wtrek kids))
+            max-kid-w (apply max kid-weights)
+            nparents (grammar/get-parents
+                       grammar node #(grammar/WEIGHTED (last (pop %))))
+            big-parents (set (for [[p n] (select-keys wtrek nparents)
+                                   :when (> (get wtrek p) max-kid-w)]
+                               p))
+            ;;_ (prn :node node :max-kid-w max-kid-w :nparents nparents :big-parents big-parents)
+            ;; Removed node might not have reducible parents
+            ;; (big-parents) but must have at least one parent
+            ;; (nparents) even though that parent might not be
+            ;; reducible (already removed).
+            _ (when (and (= 0 max-kid-w) (not (seq nparents)))
+                (throw (Exception.
+                         (str "Node " node " removed, has no parents"))))
+            new-pend (set/union pend-left
+                                (set (map pop big-parents)))
+            new-wtrek (reduce (fn [nw [p w]]
+                                (if (contains? big-parents p)
+                                  (assoc nw p max-kid-w)
+                                  (assoc nw p w)))
+                              {}
+                              wtrek)]
+        (recur new-wtrek new-pend))
+      wtrek)))
+
+;; ---------
 
 ;; Weight reducer functions. If parsed-weight is zero ignore (return
 ;; start-weight). Must eventually return 0.
@@ -78,48 +116,14 @@
     (let [norm-ladder (-> seq-ladder set (conj 0) sort reverse)]
       (or (some #(if (< % start-weight) % nil) norm-ladder) 0))))
 
-(defn reduce-wtrek
-  "Takes a grammar and wtrek and returns a context map with a :wtrek
-  map and a :removed set that describe the removed edges and nodes
-  respectively. Any zero weights in the :wtrek map represent a node
-  edge that has been removed. Any nodes in the :removed set represent
-  root NTs nodes that have been removed.
 
-  A weighted node (:alt, :ord, :opt, or :star) with all child edges is
-  a node that has been removed. For each removed node, parent-search
-  is called to propagate the removal upwards in the tree to nearest
-  weighted parent edge or root NT. If a weighted parent edge is found
-  then that edge weight is set to zero. If all siblings of the edge
-  also have a zero weight then the parent node is add to the pending
-  remove set. If no weighted parent is found (if there are no other
-  weighted nodes between the current node and the root) and the search
-  reaches a root NT node then that root NT is added to the pending
-  remove set.
 
-  The propagation of node removals continues until there are no more
-  pending node to remove. The call to parent-search may add more nodes
-  to be removed but already removed nodes will not be added again so
-  the process will eventually terminate."
-  [grammar wtrek]
-  (let [removed? (partial grammar/removed-node? grammar wtrek)
-        del-nodes (reduce #(if (removed? %2) (conj %1 %2) %1)
-                          #{}
-                          (set (map (comp pop key) wtrek)))
-        ctx (loop [ctx {:wtrek   wtrek
-                        :remove  del-nodes
-                        :removed #{}}]
-              (let [new-ctx (reduce #(parent-search grammar %1 %2)
-                                    (assoc ctx :remove #{})
-                                    (:remove ctx))]
-                (if (not (empty? (:remove new-ctx)))
-                  (recur new-ctx)
-                  new-ctx)))]
-    {:wtrek   (:wtrek ctx)
-     :removed (set (filter #(not (grammar/CHILD-EDGE (last %)))
-                           (:removed ctx)))}))
-
-;; TODO: if nil path points to current rule nt (recursive) we can't
-;; reduce nil path to 0 or will have infinite recursion.
+;; There is a problem that arises when we reduce the weight of
+;; a nil-ending path (:start/:opt) to 0. This implies infinite
+;; recursion because the remaining 0-ending path is the 1 or more
+;; portion. However, because we construct our recursvie generator by
+;; slicing a the smallest non-recursive tree for the inner generator,
+;; we avoid infinite recursion.
 
 (defn reduce-wtrek-with-weights
   "Takes a grammar, wtrek, a weights-to-reduce map, a reduce-mode
@@ -152,21 +156,64 @@
                       weights-to-reduce)]
       (merge wtrek red))
 
-    :leaf
-    (let [heavy? #(and % (> % 0))
-;;          px #(do (prn %1) (pprint %2) %3)
-          rpath (as-> (grammar/trek grammar) x
-                  (filter #(grammar/TERMINAL (val %)) x) ;; terminals
-                  (keys x) ;; terminal paths
-                  (filter #(and (heavy? (get weights-to-reduce %))
-                                (heavy? (get wtrek %))) x) ;; non-zero
-                  ;; TODO: better overall grammar depth measure rather
-                  ;; than single rule depth (count path)
-                  (sort-by (juxt count #(or (get wtrek %) 0)) x)
-;;                  (px :sorted-paths (vec (map (juxt identity count #(or (get wtrek %) 0)) x)) x)
-                  (last x))
+    :leaf ;; sort by grammar dist, rule dist and then weight and choose uniformly from heaviest
+    (let [_ (assert (:start (meta grammar)))
+          distances (memoized-tree-distances grammar (:start (meta grammar)))
+;;          _ (prn :distances distances)
+          big? #(and % (> % 0))
+          grouped (as-> (memoized-trek grammar) x
+                    (filter #(grammar/TERMINAL (val %)) x) ;; terminals
+                    (keys x) ;; terminal paths
+                    (filter #(and (big? (get weights-to-reduce %))
+                                  (big? (get wtrek %))) x) ;; non-zero
+                    ;; Sort by grammar dist, then rule dist, then weight
+                    (group-by (juxt #(get distances (first %))
+                                    #(/ (- (count %) 1) 2)
+                                    #(or (get wtrek %) 0))
+                             x))
+;;          _ (prn :grouped)
+;;          _ (pprint (sort-by key grouped))
+          leafiest (last (sort-by key grouped))
+          rpath (rand-nth (val leafiest))]
+;;      (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
+      (assoc wtrek rpath (reducer-fn
+                           (get wtrek rpath)
+                           (get weights-to-reduce rpath))))
+
+    :leaf1 ;; just sort by weight and choose uniformly from heaviest
+    (let [big? #(and % (> % 0))
+          grouped (as-> (memoized-trek grammar) x
+                    (filter #(grammar/TERMINAL (val %)) x) ;; terminals
+                    (keys x) ;; terminal paths
+                    (filter #(and (big? (get weights-to-reduce %))
+                                  (big? (get wtrek %))) x) ;; non-zero
+                    (group-by (juxt #(or (get wtrek %) 0))
+                             x))
+;;          _ (prn :grouped)
+;;          _ (pprint (sort-by key grouped))
+          leafiest (last (sort-by key grouped))
+          rpath (rand-nth (val leafiest))]
+;;      (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
+      (assoc wtrek rpath (reducer-fn
+                           (get wtrek rpath)
+                           (get weights-to-reduce rpath))))
+
+    :leaf2 ;; sort by weight and choose random weighted
+    (let [big? #(and % (> % 0))
+          grouped (as-> (memoized-trek grammar) x
+                    (filter #(grammar/TERMINAL (val %)) x) ;; terminals
+                    (keys x) ;; terminal paths
+                    (filter #(and (big? (get weights-to-reduce %))
+                                  (big? (get wtrek %))) x) ;; non-zero
+                    (group-by (juxt #(or (get wtrek %) 0))
+                             x))
+;;          _ (prn :grouped)
+;;          _ (pprint (sort-by key grouped))
+          rpath (util/weighted-rand-nth (for [[[w] ps] grouped
+                                              p ps]
+                                          [p w]))
           ]
-;;      (prn :rpath rpath (get wtrek rpath) (get weights-to-reduce rpath))
+;;      (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
       (assoc wtrek rpath (reducer-fn
                            (get wtrek rpath)
                            (get weights-to-reduce rpath))))

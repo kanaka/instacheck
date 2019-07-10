@@ -93,113 +93,100 @@ rS = #'\\s+'")
 
 (deftest reduce-wtrek-test
   (testing "reduce-wtrek"
-    (testing "remove propagates"
+    (testing ":alts 25 returns unchanged wtrek"
+      (let [p (g/load-parser "r1 = 'a' r2; r2 = 'b' | 'c'")
+            g (g/parser->grammar p)
+            w {[:r2 :alt 0] 25
+               [:r2 :alt 1] 25}]
+        (is (= (r/reduce-wtrek g w)
+               w))))
+    (testing ":alts 0 throws with no propagation"
       (let [p (g/load-parser "r1 = 'a' r2; r2 = 'b' | 'c'")
             g (g/parser->grammar p)
             w {[:r2 :alt 0] 0
                [:r2 :alt 1] 0}]
-        (= (r/reduce-wtrek g w)
-           {:wtrek w,
-            :removed #{[:r2] [:r1] [:r2 :alt]}})))
-    (testing "remove rule pointing directly to an nt"
-      (let [p (g/load-parser "r1 = r2; r2 = 'b' | 'c'")
-            g (g/parser->grammar p)
-            w {[:r2 :alt 0] 0
-               [:r2 :alt 1] 0}]
-        (= (r/reduce-wtrek g w)
-           {:wtrek w
-            :removed #{[:r2] [:r1] [:r2 :alt]}})))
+        (is (thrown? Exception (r/reduce-wtrek g w)))))
     (testing "propagate through root NT"
       (let [w (merge w1-all {[:foobar :alt 0] 0
                              [:foobar :alt 1] 0})]
         (is (= (r/reduce-wtrek g1 w)
-               {:wtrek (merge w {[:start :alt 1] 0}),
-                :removed #{[:foobar :alt] [:foobar]}}))))
+               (merge w {[:start :alt 1] 0})))))
     (testing "propagate through intermediate parents and root NT"
       (let [w (merge w1-all {[:foobar :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 1] 0})]
         (is (= (r/reduce-wtrek g1 w)
-               {:wtrek (merge w {[:foobar :alt 1] 0
-                                 [:start :alt 1] 0})
-                :removed #{[:foobar :alt] [:foobar]
-                           [:foobar :alt 1 :cat 1 :alt]}}))))
-    (testing "propagate through intermediate parents and two root NTs"
+               (merge w {[:foobar :alt 1] 0
+                         [:start :alt 1] 0})))))
+    (testing "propagate 12 through intermediate parents and root NT"
+      (let [w (merge w1-all {[:foobar :alt 0] 12
+                             [:foobar :alt 1 :cat 1 :alt 0] 12
+                             [:foobar :alt 1 :cat 1 :alt 1] 12
+                             [:start :alt 0] 12})]
+        (is (= (r/reduce-wtrek g1 w)
+               (merge w {[:foobar :alt 1] 12
+                         [:start :alt 1] 12})))))
+    (testing "propagate 0 through root NT causes exception"
       (let [w (merge w1-all {[:foobar :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 0] 0
                              [:foobar :alt 1 :cat 1 :alt 1] 0
                              [:start :alt 0] 0})]
-        (is (= (r/reduce-wtrek g1 w)
-               {:wtrek (merge w {[:foobar :alt 1] 0
-                                 [:start :alt 1] 0})
-                :removed #{[:foobar :alt] [:foobar]
-                           [:foobar :alt 1 :cat 1 :alt]
-                           [:start] [:start :alt]}}))))
+        (is (thrown? Exception (r/reduce-wtrek g1 w)))))
     (testing "Propagate removal through multiple rule trees with cycles"
-      (let [w (merge w3-all {[:r3 :alt 0] 0 [:r3 :alt 1] 0})]
+      (let [w (merge w3-all {[:r3 :alt 0] 0
+                             [:r3 :alt 1] 0})]
         (is (= (r/reduce-wtrek g3 w)
-               {:wtrek (merge w {[:r3 :alt 1 :star nil] 0
-                                 [:r3 :alt 1 :star 0] 0
-                                 [:r2 :alt 2] 0})
-                :removed #{[:r3 :alt 1 :star] [:r3 :alt] [:r3]}})))
+               (merge w {[:r3 :alt 1 :star nil] 0
+                         [:r3 :alt 1 :star 0] 0
+                         [:r2 :alt 2] 0}))))
       (let [w (merge w3-all {[:r2 :alt 0] 0
                              [:r2 :alt 1] 0
                              [:r2 :alt 2] 0})]
         (is (= (r/reduce-wtrek g3 w)
-               {:wtrek (merge w {[:r2 :alt 1 :opt nil] 0
-                                 [:r2 :alt 1 :opt 0] 0
-                                 [:r1 :cat 1 :star 0 :alt 2] 0})
-                :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]}})))
-      ;; Without nil path should not remove r2 nodes
-      (let [w (merge w3-all {[:r2 :alt 0] 0
-                             [:r2 :alt 1 :opt 0] 0
-                             [:r2 :alt 2] 0})]
-        (is (= (r/reduce-wtrek g3 w)
-               {:wtrek (merge w {})
-                :removed #{}})))
-      ;; But with nil path should remove r2 nodes as well
-      (let [w (merge w3-all {[:r2 :alt 0] 0
-                             [:r2 :alt 1 :opt nil] 0
-                             [:r2 :alt 1 :opt 0] 0
-                             [:r2 :alt 2] 0})]
-        (is (= (r/reduce-wtrek g3 w)
-               {:wtrek (merge w {[:r2 :alt 1] 0
-                                 [:r1 :cat 1 :star 0 :alt 2] 0})
-                :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]}})))
+               (merge w {[:r2 :alt 1 :opt nil] 0
+                         [:r2 :alt 1 :opt 0] 0
+                         [:r1 :cat 1 :star 0 :alt 2] 0})))))
+      (testing "Without nil path should not remove r2 nodes"
+        (let [w (merge w3-all {[:r2 :alt 0] 0
+                               [:r2 :alt 1 :opt 0] 0
+                               [:r2 :alt 2] 0})]
+          (is (= (r/reduce-wtrek g3 w)
+                 w))))
+      (testing "But with nil path should remove r2 nodes as well"
+        (let [w (merge w3-all {[:r2 :alt 0] 0
+                               [:r2 :alt 1 :opt nil] 0
+                               [:r2 :alt 1 :opt 0] 0
+                               [:r2 :alt 2] 0})]
+          (is (= (r/reduce-wtrek g3 w)
+                 (merge w {[:r2 :alt 1] 0
+                           [:r1 :cat 1 :star 0 :alt 2] 0})))))
       (let [w (merge w3-all {[:r3 :alt 0] 0
                              [:r3 :alt 1] 0})]
         (is (= (r/reduce-wtrek g3 w)
-               {:wtrek (merge w {[:r3 :alt 1 :star nil] 0
-                                 [:r3 :alt 1 :star 0] 0
-                                 [:r2 :alt 2] 0})
-                :removed #{[:r3] [:r3 :alt] [:r3 :alt 1 :star]}})))
+               (merge w {[:r3 :alt 1 :star nil] 0
+                         [:r3 :alt 1 :star 0] 0
+                         [:r2 :alt 2] 0}))))
       (let [w (merge w3-all {[:r2 :alt 0] 0
                              [:r2 :alt 1] 0
                              [:r3 :alt 0] 0
                              [:r3 :alt 1] 0})]
         (is (= (r/reduce-wtrek g3 w)
-               {:wtrek (merge w {[:r1 :cat 1 :star 0 :alt 2] 0
-                                 [:r2 :alt 2] 0
-                                 [:r2 :alt 1 :opt nil] 0
-                                 [:r2 :alt 1 :opt 0] 0
-                                 [:r3 :alt 1 :star nil] 0
-                                 [:r3 :alt 1 :star 0] 0})
-                :removed #{[:r2] [:r2 :alt] [:r2 :alt 1 :opt]
-                           [:r3] [:r3 :alt] [:r3 :alt 1 :star]}}))))
+               (merge w {[:r1 :cat 1 :star 0 :alt 2] 0
+                         [:r2 :alt 2] 0
+                         [:r2 :alt 1 :opt nil] 0
+                         [:r2 :alt 1 :opt 0] 0
+                         [:r3 :alt 1 :star nil] 0
+                         [:r3 :alt 1 :star 0] 0})))))
     (testing "Propagate with nil paths"
       (let [w (merge w4-all {[:r2 :alt 0] 0})]
         (is (= (r/reduce-wtrek g4 w)
-               {:wtrek w
-                :removed #{}})))
+               w)))
       (let [w (merge w4-all {[:r2 :alt 0] 0
                              [:r2 :alt 1] 0})]
         (is (= (r/reduce-wtrek g4 w)
-               {:wtrek (merge w {[:r1 :alt 1 :opt nil] 0
-                                 [:r1 :alt 1 :opt 0] 0
-                                 [:r1 :alt 1] 0})
-                :removed #{[:r2] [:r2 :alt] [:r1 :alt 1 :opt]}})))
-      )))
-
+               (merge w {[:r1 :alt 1 :opt nil] 0
+                         [:r1 :alt 1 :opt 0] 0
+                         [:r1 :alt 1] 0}))))))
 
 (deftest reduce-wtrek-with-weights-test
   (testing "reduce-wtrek-with-weights on :alts"
@@ -213,19 +200,18 @@ rS = #'\\s+'")
                  g1 (r/reduce-wtrek-with-weights
                       g1 %1 %2 :all r/reducer-zero))]
       (testing "[:foobar :alt 0] reduced by half"
-        (let [r (rwh w1-all {[:foobar :alt 0] 1})]
-          (is (= (:wtrek r)
-                 (merge w1-all {[:foobar :alt 0] 50})))
-          (is (= (:removed r) #{}))))
+        (let [w (rwh w1-all {[:foobar :alt 0] 1})]
+          (is (= w
+                 (merge w1-all {[:foobar :alt 0] 50})))))
       (testing "[:foobar :alt 0] reduced by half multiple times"
-        (let [rfn (fn [w _] (:wtrek (rwh w {[:foobar :alt 0] 1})))]
+        (let [rfn (fn [w _] (rwh w {[:foobar :alt 0] 1}))]
           (is (= (get (reduce rfn w1-all (range 2)) [:foobar :alt 0]) 25))
           (is (= (get (reduce rfn w1-all (range 4)) [:foobar :alt 0]) 6))
           (is (= (get (reduce rfn w1-all (range 6)) [:foobar :alt 0]) 1))
           (is (= (get (reduce rfn w1-all (range 7)) [:foobar :alt 0]) 0))
           (is (= (get (reduce rfn w1-all (range 9)) [:foobar :alt 0]) 0))))
       (testing "[:foobar :alt 0] reduced by ladder multiple times"
-        (let [rfn (fn [w _] (:wtrek (rwl w {[:foobar :alt 0] 1})))]
+        (let [rfn (fn [w _] (rwl w {[:foobar :alt 0] 1}))]
           (is (= (get (reduce rfn w1-all (range 1)) [:foobar :alt 0]) 30))
           (is (= (get (reduce rfn w1-all (range 2)) [:foobar :alt 0]) 10))
           (is (= (get (reduce rfn w1-all (range 3)) [:foobar :alt 0]) 3))
@@ -233,60 +219,42 @@ rS = #'\\s+'")
           (is (= (get (reduce rfn w1-all (range 5)) [:foobar :alt 0]) 0))
           (is (= (get (reduce rfn w1-all (range 9)) [:foobar :alt 0]) 0))))
       (testing "[:foobar :alt 0] is 0"
-        (let [r (rw0 w1-all {[:foobar :alt 0] 1})]
-          (is (= (:wtrek r)
-                 (merge w1-all {[:foobar :alt 0] 0})))
-          (is (= (:removed r) #{}))))
+        (let [w (rw0 w1-all {[:foobar :alt 0] 1})]
+          (is (= w (merge w1-all {[:foobar :alt 0] 0})))))
       (testing "[:foobar :alt 1 :cat 1 :alt 0] is 0"
-        (let [r (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1})]
-          (is (= (:wtrek r)
-                 (merge w1-all {[:foobar :alt 1 :cat 1 :alt 0] 0})))
-          (is (= (:removed r) #{}))))
+        (let [w (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1})]
+          (is (= w (merge w1-all {[:foobar :alt 1 :cat 1 :alt 0] 0})))))
       (testing "Propagate 0 to parent"
-        (let [r (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1
+        (let [w (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1
                              [:foobar :alt 1 :cat 1 :alt 1] 1})]
-          (is (= (:wtrek r)
-                 (merge w1-all {[:foobar :alt 1 :cat 1 :alt 0] 0
-                                [:foobar :alt 1 :cat 1 :alt 1] 0
-                                [:foobar :alt 1] 0})))
-          (is (= (:removed r) #{[:foobar :alt 1 :cat 1 :alt]}))))
+          (is (= w (merge w1-all {[:foobar :alt 1 :cat 1 :alt 0] 0
+                                  [:foobar :alt 1 :cat 1 :alt 1] 0
+                                  [:foobar :alt 1] 0})))))
       (testing "Propagate 0 to parent in a different rule"
-        (let [r (rw0 w1-all {[:foobar :alt 0] 1
+        (let [w (rw0 w1-all {[:foobar :alt 0] 1
                              [:foobar :alt 1] 1})]
-          (is (= (:wtrek r)
-                 (merge w1-all {[:foobar :alt 0] 0
-                                [:foobar :alt 1] 0
-                                [:start :alt 1] 0})))
-          (is (= (:removed r) #{[:foobar] [:foobar :alt]}))))))
+          (is (= w (merge w1-all {[:foobar :alt 0] 0
+                                  [:foobar :alt 1] 0
+                                  [:start :alt 1] 0})))))))
 
   (testing "reduce-wtrek-with-weights of :alt, :opt, :star nodes"
     (let [rw0 #(r/reduce-wtrek
                  g2 (r/reduce-wtrek-with-weights
                       g2 %1 %2 :all r/reducer-zero))]
       (testing "[:r :cat 1 :opt 0 :alt 0] is 0"
-        (let [r (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1})]
-          (is (= (:wtrek r)
-                 (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0})))
-          (is (= (:removed r) #{}))))
+        (let [w (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1})]
+          (is (= w
+                 (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0})))))
       (testing "Propagate removal through opt to root nt"
-        (let [r (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1
+        (let [w (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1
                              [:r :cat 1 :opt 0 :alt 1] 1})]
-          (is (= (:wtrek r)
-                 (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0
-                                [:r :cat 1 :opt 0 :alt 1] 0
-                                [:r :cat 1 :opt 0] 0})))
-          (is (= (:removed r) #{[:r :cat 1 :opt 0 :alt]})))
-        (let [r (rw0 w2-all {[:r :cat 1 :opt nil] 1
-                             [:r :cat 1 :opt 0 :alt 0] 1
-                             [:r :cat 1 :opt 0 :alt 1] 1})]
-          (is (= (:wtrek r)
-                 (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0
-                                [:r :cat 1 :opt 0 :alt 1] 0
-                                [:r :cat 1 :opt nil] 0
-                                [:r :cat 1 :opt 0] 0})))
-          (is (= (:removed r) #{[:r]
-                                [:r :cat 1 :opt]
-                                [:r :cat 1 :opt 0 :alt]})))))))
+          (is (= w (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0
+                                  [:r :cat 1 :opt 0 :alt 1] 0
+                                  [:r :cat 1 :opt 0] 0}))))
+        (is (thrown? Exception
+                     (rw0 w2-all {[:r :cat 1 :opt nil] 1
+                                  [:r :cat 1 :opt 0 :alt 0] 1
+                                 [:r :cat 1 :opt 0 :alt 1] 1})))))))
 
 (defn- ebnf-set
   [grammar]
