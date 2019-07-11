@@ -20,4 +20,6 @@
 (defn vector+
   "Version of standard vector generator with at least one item"
   [gen]
-  (gen/such-that not-empty (gen/vector gen)))
+  (gen/let [v (gen/vector gen)
+            itm gen]
+    (conj v itm)))
