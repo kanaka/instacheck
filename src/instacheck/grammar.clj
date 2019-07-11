@@ -1,8 +1,10 @@
 (ns instacheck.grammar
   (:require [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
-            [clojure.walk :refer [postwalk]]
+            [clojure.set :as set]
             [clojure.string :as string]
+            [clojure.walk :refer [postwalk]]
+
             [instacheck.util :as util]
             [instaparse.core :as instaparse]))
 
@@ -168,6 +170,61 @@
         children-paths (map (fn [[i n]] (conj base-path i)) sibs)]
     (seq children-paths)))
 
+(declare trek)
+
+(defn paths-to-nt
+  "Given a grammar and a non-terminal keyword nt, return all paths
+  within the grammar that have nt as a leaf node."
+  [grammar nt]
+  (let [gs (trek grammar)
+        base-nt-leafs (filter #(and (keyword? (val %))
+                                    (= nt (val %)))
+                              gs)
+        ;; Add :opt and :star nil paths and convert to set
+        nt-leafs (reduce
+                   (fn [l [p _]]
+                     (if (#{:opt :star} (last (pop p)))
+                       (conj l p (conj (pop p) nil))
+                       (conj l p)))
+                   #{}
+                   base-nt-leafs)]
+    nt-leafs))
+
+(def memoized-paths-to-nt (memoize paths-to-nt))
+
+(defn get-parents*
+  [grammar path pred avoid]
+  (cond
+    (avoid path)
+    #{}
+
+    (pred path)
+    #{path}
+
+    (= 1 (count path)) ;; path is an nt root
+    (let [paths (memoized-paths-to-nt grammar (first path))
+          avoid (set/union (set paths) avoid)]
+      (apply
+        set/union
+        (map #(get-parents* grammar % pred (disj avoid %))
+             paths)))
+
+    :else
+    (recur grammar (pop path) pred (set/union #{path} avoid))))
+
+(defn get-parents
+  "Returns a set p paths for which each p is a parent of path in
+  grammar for which (pred p) is true. For example, to find the nearest
+  parent :cat nodes of my-path:
+      (get-parents g my-path #(= :cat (last %)))"
+  [grammar path pred]
+  (let [path (if (= 1 (count path)) path (pop path))]
+    (get-parents* grammar path pred #{})))
+
+(defn get-weighted-parents
+  [grammar path]
+  (get-parents grammar path #(WEIGHTED (last %))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; trek functions
 
@@ -308,24 +365,6 @@
                (path->tree* tree (subvec p 1) leaf))
              nil
              rules))]))))
-
-(defn paths-to-nt
-  "Given a grammar and a non-terminal keyword nt, return all paths
-  within the grammar that have nt as a leaf node."
-  [grammar nt]
-  (let [gs (trek grammar)
-        base-nt-leafs (filter #(and (keyword? (val %))
-                                    (= nt (val %)))
-                              gs)
-        ;; Add :opt and :star nil paths and convert to set
-        nt-leafs (reduce
-                   (fn [l [p _]]
-                     (if (#{:opt :star} (last (pop p)))
-                       (conj l p (conj (pop p) nil))
-                       (conj l p)))
-                   #{}
-                   base-nt-leafs)]
-    nt-leafs))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

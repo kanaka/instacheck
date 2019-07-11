@@ -279,6 +279,27 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              (g/children-of-node g8 [:r :cat 0 :plus])
              '([:r :cat 0 :plus 0]))))))
 
+(deftest paths-to-nt-test
+  (testing "paths-to-nt"
+    (is (= (g/paths-to-nt g1 :start)
+           #{}))
+    (is (= (g/paths-to-nt g1 :foobar)
+           #{[:start :alt 1]}))
+    (is (= (g/paths-to-nt g1 :noththere)
+           #{}))
+    (is (= (g/paths-to-nt g3 :r1)
+           #{}))
+    (is (= (g/paths-to-nt g3 :r2)
+           #{[:r1 :alt 0]}))
+    (is (= (g/paths-to-nt g3 :r3)
+           #{[:r1 :alt 1]
+             [:r2 :alt 0]
+             [:r2 :alt 1 :cat 1 :plus 0]}))))
+
+(deftest get-parents-test
+  ;; TOOD: get-parents and get-weighted-parent tests
+  )
+
 
 ;; trek functions
 
@@ -381,23 +402,6 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
       (is (= g7 (g/trek->grammar (g/trek g7))))
       (is (= g8 (g/trek->grammar (g/trek g8))))
       (is (= g9 (g/trek->grammar (g/trek g9)))))))
-
-(deftest paths-to-nt-test
-  (testing "paths-to-nt"
-    (is (= (g/paths-to-nt g1 :start)
-           #{}))
-    (is (= (g/paths-to-nt g1 :foobar)
-           #{[:start :alt 1]}))
-    (is (= (g/paths-to-nt g1 :noththere)
-           #{}))
-    (is (= (g/paths-to-nt g3 :r1)
-           #{}))
-    (is (= (g/paths-to-nt g3 :r2)
-           #{[:r1 :alt 0]}))
-    (is (= (g/paths-to-nt g3 :r3)
-           #{[:r1 :alt 1]
-             [:r2 :alt 0]
-             [:r2 :alt 1 :cat 1 :plus 0]}))))
 
 
 ;; weight functions
