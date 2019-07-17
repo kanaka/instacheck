@@ -7,13 +7,12 @@
 
 (def memoized-tree-distances
   (memoize util/tree-distances))
-(def memoized-paths-to-nt
-  (memoize grammar/paths-to-nt))
+(def memoized-paths-to-leaf
+  (memoize grammar/paths-to-leaf))
 (def memoized-trek
   (memoize grammar/trek))
 
 ;; ---
-
 
 (defn reduce-wtrek
   "Takes a grammar and wtrek and returns a new reduced wtrek with all

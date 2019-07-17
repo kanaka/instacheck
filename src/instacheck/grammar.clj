@@ -172,25 +172,23 @@
 
 (declare trek)
 
-(defn paths-to-nt
+(defn paths-to-leaf
   "Given a grammar and a non-terminal keyword nt, return all paths
   within the grammar that have nt as a leaf node."
-  [grammar nt]
+  [grammar leaf-val]
   (let [gs (trek grammar)
-        base-nt-leafs (filter #(and (keyword? (val %))
-                                    (= nt (val %)))
-                              gs)
+        base-paths (keys (filter #(= leaf-val (val %)) gs))
         ;; Add :opt and :star nil paths and convert to set
-        nt-leafs (reduce
-                   (fn [l [p _]]
-                     (if (#{:opt :star} (last (pop p)))
-                       (conj l p (conj (pop p) nil))
-                       (conj l p)))
-                   #{}
-                   base-nt-leafs)]
-    nt-leafs))
+        paths (reduce
+                (fn [l p]
+                  (if (#{:opt :star} (last (pop p)))
+                    (conj l p (conj (pop p) nil))
+                    (conj l p)))
+                #{}
+                base-paths)]
+    paths))
 
-(def memoized-paths-to-nt (memoize paths-to-nt))
+(def memoized-paths-to-leaf (memoize paths-to-leaf))
 
 (defn get-parents*
   [grammar path pred avoid]
@@ -202,7 +200,7 @@
     #{path}
 
     (= 1 (count path)) ;; path is an nt root
-    (let [paths (memoized-paths-to-nt grammar (first path))
+    (let [paths (memoized-paths-to-leaf grammar (first path))
           avoid (set/union (set paths) avoid)]
       (apply
         set/union
@@ -291,12 +289,12 @@
   (trek-grammar* grammar (fn [p n] (when (LEAF-TAGS (:tag n))
                                      {p (node-to-val n n)}))))
 
-(defn comment-wtrek
-  "Return a wtrek with comment values (map of grammar paths to parsed
+(defn comment-trek
+  "Return a trek with comment values (map of grammar paths to parsed
   comments) by reading edn maps from comments in the grammar. Note
   that this will return different paths than a normal trek because
   a comments can occur on any :alt/:ord nodes and since comments can
-  occur in internal :alt/:ord nodes a comment wtrek will have these
+  occur in internal :alt/:ord nodes a comment trek will have these
   internal nodes (a regular trek will not).
 
   Multiple comments with edn maps in the same node will be merged into
@@ -432,7 +430,7 @@
   [grammar & [default-weight]]
   (let [dw (or default-weight 100)]
     (merge (wtrek-without-comment-weights* grammar dw)
-           (comment-wtrek grammar :weight))))
+           (comment-trek grammar :weight))))
 
 (defn path-log-trek
   "Takes a grammar and parse-result parsed using that grammar and

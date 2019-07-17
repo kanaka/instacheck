@@ -279,19 +279,19 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              (g/children-of-node g8 [:r :cat 0 :plus])
              '([:r :cat 0 :plus 0]))))))
 
-(deftest paths-to-nt-test
-  (testing "paths-to-nt"
-    (is (= (g/paths-to-nt g1 :start)
+(deftest paths-to-leaf-test
+  (testing "paths-to-leaf"
+    (is (= (g/paths-to-leaf g1 :start)
            #{}))
-    (is (= (g/paths-to-nt g1 :foobar)
+    (is (= (g/paths-to-leaf g1 :foobar)
            #{[:start :alt 1]}))
-    (is (= (g/paths-to-nt g1 :noththere)
+    (is (= (g/paths-to-leaf g1 :noththere)
            #{}))
-    (is (= (g/paths-to-nt g3 :r1)
+    (is (= (g/paths-to-leaf g3 :r1)
            #{}))
-    (is (= (g/paths-to-nt g3 :r2)
+    (is (= (g/paths-to-leaf g3 :r2)
            #{[:r1 :alt 0]}))
-    (is (= (g/paths-to-nt g3 :r3)
+    (is (= (g/paths-to-leaf g3 :r3)
            #{[:r1 :alt 1]
              [:r2 :alt 0]
              [:r2 :alt 1 :cat 1 :plus 0]}))))
@@ -356,9 +356,9 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1 :cat 1 :alt 0] 50
             [:foobar :alt 1 :cat 1 :alt 1] 60}))))
 
-(deftest comment-wtrek-test
-  (testing "comment-wtrek, wtrek"
-    (is (= (g/comment-wtrek g5)
+(deftest comment-trek-test
+  (testing "comment-trek, wtrek"
+    (is (= (g/comment-trek g5)
            {[:start :alt 0] {:weight 10},
             [:start :alt 2] {:weight 20},
             [:foobar :alt 0] {:weight 30},
