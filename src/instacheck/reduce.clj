@@ -120,6 +120,139 @@
 
 
 
+;; (defn- rule-leaf-immediate-dist
+;;   "How many weighted node are crossed from rule-nt to leaf-nt within
+;;   the same rule. If leaf-nt occurs multiple times then returns the
+;;   shortest depth. If rule-nt and leaf-nt are the same then returns 0."
+;;   [grammar rule-nt leaf-nt]
+;;   (let [paths (filter #(= rule-nt (first %))
+;;                       (grammar/paths-to-leaf grammar leaf-nt))]
+;;     (prn :rule-nt rule-nt :leaf-nt leaf-nt :paths paths)
+;;     (if (= rule-nt leaf-nt)
+;;       0
+;;       (apply min
+;;              (for [path paths]
+;;                (count (filter #(grammar/WEIGHTED %) path)))))))
+;;
+;; (defn- grammar-distances
+;;   [grammar & [start]]
+;;   (let [start (or start (:start (meta grammar)))
+;;         deps (util/tree-deps grammar)
+;;         dists (into
+;;                 {} (for [[rule-nt leaf-nts] deps]
+;;                      [rule-nt
+;;                       (into
+;;                         {} (for [leaf-nt leaf-nts]
+;;                              [leaf-nt
+;;                               (rule-leaf-immedate-dist
+;;                                 grammar rule-nt leaf-nt)]))]))]
+;;     (util/tree-distances grammar dists start)))
+;;
+;; (defn- wtrek-dists
+;;   [grammar start-nt]
+;;   (let [wtrek (grammar/wtrek grammar)]
+;;         gdist (grammar-distances grammar start-nt)]
+;;   )
+
+(defn- ltrek*
+  "Given a grammar and a wtrek, update ltrek with likelihood of
+  reaching every node of grammar."
+  [grammar wtrek path node ltrek likelihood]
+  (let [tag (:tag node)
+        ltrek (update ltrek path (fnil + 0) likelihood)]
+;;   (prn :path path :tag tag :likelihood likelihood)
+    (cond
+      (< likelihood 0.001)
+      ltrek
+
+      (#{:string :regexp :epsilon} tag)
+      ltrek
+
+      (= :nt tag)
+      (let [nt (:keyword node)]
+        (recur grammar wtrek [nt] (get grammar nt) ltrek likelihood))
+
+      (#{:cat :alt :ord :star :opt} tag)
+      (let [child-paths (grammar/children-of-node grammar (conj path tag))
+            child-nodes (cond
+                          (#{:cat :alt} tag)  (:parsers node)
+                          (= :ord tag)        [(:parser1 node) (:parser2 node)]
+                          (#{:star :opt} tag) [{:tag :epsilon} (:parser node)])
+            total-weight (apply + (map #(get wtrek % 100) child-paths))]
+;;        (println "  " :child-paths child-paths)
+        (reduce
+          (fn [lt [p n]]
+            (ltrek* grammar wtrek p n lt
+                    (if (= :cat tag)
+                      likelihood
+                      (* likelihood (/ (get wtrek p) total-weight)))))
+          ltrek
+          (map vector child-paths child-nodes)))
+
+      (= :plus tag)
+      (recur grammar wtrek (conj path :plus 0) (:parser node) ltrek likelihood))))
+
+(defn likelihood-trek
+  [grammar wtrek]
+  (let [start (:start (meta grammar))]
+    (ltrek* grammar wtrek [start] (get grammar start) {} 1)))
+
+(defn terminal-likelihood-trek
+  [grammar wtrek]
+  (let [tk (grammar/trek grammar)
+        ttk (into {} (filter (comp grammar/TERMINAL val) tk))]
+    (select-keys (likelihood-trek grammar wtrek) (keys ttk))))
+
+(defn- dtrek*
+  "Given a grammar and a wtrek, update dtrek with distance to reach
+  every node of grammar."
+  [grammar path node dtrek dist]
+  (let [tag (:tag node)]
+;;   (prn :path path :tag tag :dist dist)
+    (cond
+      (contains? dtrek path)
+      dtrek
+
+      (#{:string :regexp :epsilon} tag)
+      (assoc dtrek path dist)
+
+      (= :nt tag)
+      (let [nt (:keyword node)]
+        (recur grammar [nt] (get grammar nt)
+               (assoc dtrek path dist) (inc dist)))
+
+      (#{:cat :alt :ord :star :opt} tag)
+      (let [child-paths (grammar/children-of-node grammar (conj path tag))
+            child-nodes (cond
+                          (#{:cat :alt} tag)  (:parsers node)
+                          (= :ord tag)        [(:parser1 node) (:parser2 node)]
+                          (#{:star :opt} tag) [{:tag :epsilon} (:parser node)])
+            next-dist (if (= (count path) 1) (inc dist) dist)]
+;;        (println "  " :child-paths child-paths)
+        (reduce
+          (fn [dt [p n]]
+            (assoc
+              (dtrek* grammar p n dt (inc next-dist))
+              (conj path tag) next-dist
+              p (inc next-dist)))
+          (assoc dtrek path dist)
+          ;;(assoc dtrek path dist (conj path tag) (inc dist))
+          (map vector child-paths child-nodes)))
+
+      (= :plus tag)
+      (let [next-dist (if (= (count path) 1) (inc dist) dist)]
+        (recur grammar (conj path :plus 0) (:parser node)
+               (assoc dtrek
+                      path dist
+                      (conj path :plus) next-dist) (inc next-dist))))))
+
+(defn distance-trek
+  [grammar]
+  (let [start (:start (meta grammar))]
+    (dtrek* grammar [start] (get grammar start) {} 0)))
+
+
+(def debug (atom nil))
 ;; There is a problem that arises when we reduce the weight of
 ;; a nil-ending path (:start/:opt) to 0. This implies infinite
 ;; recursion because the remaining 0-ending path is the 1 or more
@@ -136,7 +269,6 @@
   reducer-fn should return a new value to be updated in the wtrek.
 
   reduce-mode values:
-    :all  - every path in weights-to-reduce is reduced.
     :leaf - one deepest and highest weight terminal path is reduced.
     :path - similar to leaf but if parent has greater weight, it will
             be reduced to the child level, otherwise child is reduced.
@@ -149,80 +281,134 @@
       (reduce-wtrek-with-weights
         grammar wtrek weights-to-reduce :simple reducer-fn))"
   [grammar wtrek weights-to-reduce reduce-mode reducer-fn]
-  (condp = reduce-mode
-    :all
-    (let [red (reduce (fn [a [p rw]]
-                        (let [sw (get wtrek p)]
-                          (assoc a p (reducer-fn sw rw))))
-                      {}
-                      weights-to-reduce)]
-      (merge wtrek red))
+  (let [big? #(and % (> % 0))
+        bigs (filter #(and (big? (get weights-to-reduce %))
+                           (big? (get wtrek %)))
+                     (keys weights-to-reduce))
+;;        _ (prn :bigs)
+;;        _ (pprint bigs)
+        rpath (condp = reduce-mode
+                ;; sort by grammar dist, rule dist and then weight
+                ;; and choose uniformly from heaviest
+                :leaf
+                (let [_ (assert (:start (meta grammar)))
+                      child-dists (into {} (for [[n cs] (util/tree-deps grammar)]
+                                             [n (into {} (for [c cs]
+                                                           [c (if (= c n) 0 1)]))]))
+                      distances (memoized-tree-distances
+                                  grammar (:start (meta grammar)) child-dists)
+                      ;; _ (prn :distances distances)
+                      grouped (group-by (juxt #(get distances (first %))
+                                              #(/ (- (count %) 1) 2)
+                                              #(or (get wtrek %) 0))
+                                        bigs)
+;;                      _ (prn :grouped)
+;;                      _ (pprint (sort-by key grouped))
+                      leafiest (last (sort-by key grouped))]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :grouped grouped
+                                 :leafiest leafiest})
+                  (when (seq leafiest)
+                    (rand-nth (val leafiest))))
 
-    :leaf ;; sort by grammar dist, rule dist and then weight and choose uniformly from heaviest
-    (let [_ (assert (:start (meta grammar)))
-          distances (memoized-tree-distances grammar (:start (meta grammar)))
-;;          _ (prn :distances distances)
-          big? #(and % (> % 0))
-          grouped (as-> (memoized-trek grammar) x
-                    (filter #(grammar/TERMINAL (val %)) x) ;; terminals
-                    (keys x) ;; terminal paths
-                    (filter #(and (big? (get weights-to-reduce %))
-                                  (big? (get wtrek %))) x) ;; non-zero
-                    ;; Sort by grammar dist, then rule dist, then weight
-                    (group-by (juxt #(get distances (first %))
-                                    #(/ (- (count %) 1) 2)
-                                    #(or (get wtrek %) 0))
-                             x))
-;;          _ (prn :grouped)
-;;          _ (pprint (sort-by key grouped))
-          leafiest (last (sort-by key grouped))
-          rpath (rand-nth (val leafiest))]
-;;      (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
+                ;; just sort by weight and choose uniformly from
+                ;; heaviest
+                :leaf1
+                (let [grouped (group-by #(or (get wtrek %) 0)
+                                        bigs)
+;;                      _ (prn :grouped)
+;;                      _ (pprint (sort-by key grouped))
+                      heaviest (last (sort-by key grouped))]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :grouped grouped
+                                 :heaviest heaviest})
+                  (when (seq heaviest)
+                    (rand-nth (val heaviest))))
+
+                ;; sort by weight and choose random weighted
+                :leaf2
+                (let [grouped (group-by #(or (get wtrek %) 0)
+                                        bigs)
+;;                      _ (prn :grouped)
+;;                      _ (pprint (sort-by key grouped))
+                      ]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :grouped grouped})
+                  (when (seq grouped)
+                    (util/weighted-rand-nth (for [[w ps] grouped
+                                                  p ps]
+                                              [p w]))))
+
+                ;; select the path with highest likelihood
+                :lleaf1
+                (let [ltk (likelihood-trek grammar wtrek)
+                      bigs-ltk (select-keys ltk bigs)]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :ltk ltk
+                                 :big-ltk bigs-ltk})
+                  (when (seq bigs-ltk)
+                    (last (keys (sort-by val bigs-ltk)))))
+
+                ;; choose random weighted based on likelihood
+                :lleaf2
+                (let [ltk (likelihood-trek grammar wtrek)
+                      bigs-ltk (select-keys ltk bigs)]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :ltk ltk
+                                 :big-ltk bigs-ltk})
+                  (when (seq bigs-ltk)
+                    (util/weighted-rand-nth bigs-ltk)))
+
+                ;; sort by weight and then distance and choose
+                ;; uniformly from heaviest
+                :dleaf1
+                (let [distances (distance-trek grammar)
+                      ;; _ (prn :distances distances)
+                      grouped (group-by (juxt #(or (get wtrek %) 0)
+                                              #(get distances %))
+                                        bigs)
+;;                      _ (prn :grouped)
+;;                      _ (pprint (sort-by key grouped))
+                      leafiest (last (sort-by key grouped))]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :distances distances
+                                 :grouped grouped
+                                 :leafiest leafiest})
+                  (when (seq leafiest)
+                    (rand-nth (val leafiest))))
+
+                ;; sort by weight * distance choose random weighted
+                :dleaf2
+                (let [distances (distance-trek grammar)
+                      grouped (group-by #(or (get wtrek %) 0)
+                                        bigs)
+;;                      _ (prn :grouped)
+;;                      _ (pprint (sort-by key grouped))
+                      ]
+                  (reset! debug {:wtr weights-to-reduce
+                                 :wtrek wtrek
+                                 :grouped grouped})
+                  (when (seq grouped)
+                    (util/weighted-rand-nth (for [[w ps] grouped
+                                                  p ps]
+                                              [p (* w (get distances p))]))))
+
+                )]
+    (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
+    (if rpath
       (assoc wtrek rpath (reducer-fn
                            (get wtrek rpath)
-                           (get weights-to-reduce rpath))))
+                           (get weights-to-reduce rpath)))
+      (do (println "******************* no rpath *******************")
+          wtrek)))
 
-    :leaf1 ;; just sort by weight and choose uniformly from heaviest
-    (let [big? #(and % (> % 0))
-          grouped (as-> (memoized-trek grammar) x
-                    (filter #(grammar/TERMINAL (val %)) x) ;; terminals
-                    (keys x) ;; terminal paths
-                    (filter #(and (big? (get weights-to-reduce %))
-                                  (big? (get wtrek %))) x) ;; non-zero
-                    (group-by (juxt #(or (get wtrek %) 0))
-                             x))
-;;          _ (prn :grouped)
-;;          _ (pprint (sort-by key grouped))
-          leafiest (last (sort-by key grouped))
-          rpath (rand-nth (val leafiest))]
-;;      (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
-      (assoc wtrek rpath (reducer-fn
-                           (get wtrek rpath)
-                           (get weights-to-reduce rpath))))
-
-    :leaf2 ;; sort by weight and choose random weighted
-    (let [big? #(and % (> % 0))
-          grouped (as-> (memoized-trek grammar) x
-                    (filter #(grammar/TERMINAL (val %)) x) ;; terminals
-                    (keys x) ;; terminal paths
-                    (filter #(and (big? (get weights-to-reduce %))
-                                  (big? (get wtrek %))) x) ;; non-zero
-                    (group-by (juxt #(or (get wtrek %) 0))
-                             x))
-;;          _ (prn :grouped)
-;;          _ (pprint (sort-by key grouped))
-          rpath (util/weighted-rand-nth (for [[[w] ps] grouped
-                                              p ps]
-                                          [p w]))
-          ]
-;;      (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
-      (assoc wtrek rpath (reducer-fn
-                           (get wtrek rpath)
-                           (get weights-to-reduce rpath))))
-
-
-    ;;:path
-    ))
+  )
 
 ;; ---
 

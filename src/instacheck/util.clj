@@ -33,24 +33,6 @@
              {k2 #{k1}}
              {k2 #{}}))))
 
-#_(defn tree-distances
-  [trees]
-  (let [deps (tree-deps trees)
-        dists (into {} (for [[k v] deps
-                            dep v]
-                        [[k dep] 1]))]
-    (loop [left-ks (keys trees)
-           dists dists]
-      (let [[k & left-ks] left-ks]
-        (if (not k)
-          dists
-          (let [dists (reduce
-                       (fn [[[start end] dist]]
-                         )
-                       {}
-                       dists)]
-            (recur left-ks dist)))))))
-
 (defn remove-key
   "Walk a tree removing every key/value where key match k"
   [tree k]
@@ -60,30 +42,28 @@
 
 (defn tree-distances
   "Applies Djikstra's algorithm to find the shortest paths in trees
-  from start key to all the other top-level nodes/keys. Returns a map
-  of keys from trees with values that are the distance (hops) from the
-  start key to that node/key."
-  [trees start]
-  (let [;; immediate recursive dist is 0, otherwise 1
-        child-dists (into {} (for [[n cs] (tree-deps trees)]
-                               [n (into {} (for [c cs]
-                                             [c (if (= c n) 0 1)]))]))]
-    (loop [pending {start 0}
-           all-dists {}]
-      (if (seq pending)
-        (let [[node ndist] (first (sort-by val pending))
-              new-pending (dissoc pending node)
-              dist (reduce
-                     (fn [a [n d]]
-                       (if (contains? all-dists n)
-                         a
-                         (assoc a n (+ ndist d))))
-                     {}
-                     (get child-dists node))]
-          (recur
-            (merge-with min new-pending dist)
-            (assoc all-dists node ndist)))
-        all-dists))))
+  from start key to all the other top-level nodes/keys. Takes a trees
+  structure, a child-dists map of maps (with all immediate
+  parent-child distances) and a start node. Returns a map of keys from
+  trees with values that are the distance (hops) from the start key to
+  that node/key."
+  [trees child-dists start]
+  (loop [pending {start 0}
+         all-dists {}]
+    (if (seq pending)
+      (let [[node ndist] (first (sort-by val pending))
+            new-pending (dissoc pending node)
+            dist (reduce
+                   (fn [a [n d]]
+                     (if (contains? all-dists n)
+                       a
+                       (assoc a n (+ ndist d))))
+                   {}
+                   (get child-dists node))]
+        (recur
+          (merge-with min new-pending dist)
+          (assoc all-dists node ndist)))
+      all-dists)))
 
 (defn weighted-rand-nth
   "Take a sequence of val-weight pairs (can be a map of val to

@@ -189,16 +189,17 @@ rS = #'\\s+'")
                          [:r1 :alt 1] 0}))))))
 
 (deftest reduce-wtrek-with-weights-test
+  ;; TODO: reduce-wtrek-with-weights other modes
   (testing "reduce-wtrek-with-weights on :alts"
     (let [rwh #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      g1 %1 %2 :all r/reducer-half))
+                      g1 %1 %2 :dleaf2 r/reducer-half))
           rwl #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      g1 %1 %2 :all (partial r/reducer-ladder [30 10 3 1])))
+                      g1 %1 %2 :dleaf2 (partial r/reducer-ladder [30 10 3 1])))
           rw0 #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      g1 %1 %2 :all r/reducer-zero))]
+                      g1 %1 %2 :dleaf2 r/reducer-zero))]
       (testing "[:foobar :alt 0] reduced by half"
         (let [w (rwh w1-all {[:foobar :alt 0] 1})]
           (is (= w
@@ -225,14 +226,14 @@ rS = #'\\s+'")
         (let [w (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1})]
           (is (= w (merge w1-all {[:foobar :alt 1 :cat 1 :alt 0] 0})))))
       (testing "Propagate 0 to parent"
-        (let [w (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1
-                             [:foobar :alt 1 :cat 1 :alt 1] 1})]
+        (let [w (rw0 w1-all {[:foobar :alt 1 :cat 1 :alt 0] 1})
+              w (rw0 w      {[:foobar :alt 1 :cat 1 :alt 1] 1})]
           (is (= w (merge w1-all {[:foobar :alt 1 :cat 1 :alt 0] 0
                                   [:foobar :alt 1 :cat 1 :alt 1] 0
                                   [:foobar :alt 1] 0})))))
       (testing "Propagate 0 to parent in a different rule"
-        (let [w (rw0 w1-all {[:foobar :alt 0] 1
-                             [:foobar :alt 1] 1})]
+        (let [w (rw0 w1-all {[:foobar :alt 0] 1})
+              w (rw0 w      {[:foobar :alt 1] 1})]
           (is (= w (merge w1-all {[:foobar :alt 0] 0
                                   [:foobar :alt 1] 0
                                   [:start :alt 1] 0})))))))
@@ -240,21 +241,22 @@ rS = #'\\s+'")
   (testing "reduce-wtrek-with-weights of :alt, :opt, :star nodes"
     (let [rw0 #(r/reduce-wtrek
                  g2 (r/reduce-wtrek-with-weights
-                      g2 %1 %2 :all r/reducer-zero))]
+                      g2 %1 %2 :dleaf2 r/reducer-zero))]
       (testing "[:r :cat 1 :opt 0 :alt 0] is 0"
         (let [w (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1})]
           (is (= w
                  (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0})))))
       (testing "Propagate removal through opt to root nt"
-        (let [w (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1
-                             [:r :cat 1 :opt 0 :alt 1] 1})]
+        (let [w (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1})
+              w (rw0 w      {[:r :cat 1 :opt 0 :alt 1] 1})]
           (is (= w (merge w2-all {[:r :cat 1 :opt 0 :alt 0] 0
                                   [:r :cat 1 :opt 0 :alt 1] 0
                                   [:r :cat 1 :opt 0] 0}))))
         (is (thrown? Exception
-                     (rw0 w2-all {[:r :cat 1 :opt nil] 1
-                                  [:r :cat 1 :opt 0 :alt 0] 1
-                                 [:r :cat 1 :opt 0 :alt 1] 1})))))))
+                     (-> w2-all
+                         (rw0 {[:r :cat 1 :opt nil] 1})
+                         (rw0 {[:r :cat 1 :opt 0 :alt 0] 1})
+                         (rw0 {[:r :cat 1 :opt 0 :alt 1] 1}))))))))
 
 (defn- ebnf-set
   [grammar]
