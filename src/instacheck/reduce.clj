@@ -64,12 +64,15 @@
             big-parents (set (for [[p n] (select-keys wtrek nparents)
                                    :when (> (get wtrek p) max-kid-w)]
                                p))
-            ;;_ (prn :node node :max-kid-w max-kid-w :nparents nparents :big-parents big-parents)
-            ;; Removed node might not have reducible parents
-            ;; (big-parents) but must have at least one parent
-            ;; (nparents) even though that parent might not be
-            ;; reducible (already removed).
-            _ (when (and (= 0 max-kid-w) (not (seq nparents)))
+;;            _ (prn :node node :max-kid-w max-kid-w :nparents nparents :big-parents big-parents)
+            ;; Removed node must have at least one weighted parent in
+            ;; nparents that is not self-recursive (i.e. not lower
+            ;; than node in the same rule). If there are none than
+            ;; this indicates that node has no parents between itself
+            ;; and the root/start of the grammar.
+            nonrecur-nparents (filter #(not (= (take (count node) %) node))
+                                      nparents)
+            _ (when (and (= 0 max-kid-w) (not (seq nonrecur-nparents)))
                 (throw (Exception.
                          (str "Node " node " removed, has no parents"))))
             new-pend (set/union pend-left
