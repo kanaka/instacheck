@@ -192,30 +192,6 @@
 ;;        _ (prn :bigs)
 ;;        _ (pprint bigs)
         rpath (condp = reduce-mode
-                ;; sort by grammar dist, rule dist and then weight
-                ;; and choose uniformly from heaviest
-                :leaf
-                (let [_ (assert (:start (meta grammar)))
-                      child-dists (into {} (for [[n cs] (util/tree-deps grammar)]
-                                             [n (into {} (for [c cs]
-                                                           [c (if (= c n) 0 1)]))]))
-                      distances (memoized-tree-distances
-                                  grammar (:start (meta grammar)) child-dists)
-                      ;; _ (prn :distances distances)
-                      grouped (group-by (juxt #(get distances (first %))
-                                              #(/ (- (count %) 1) 2)
-                                              #(or (get wtrek %) 0))
-                                        bigs)
-;;                      _ (prn :grouped)
-;;                      _ (pprint (sort-by key grouped))
-                      leafiest (last (sort-by key grouped))]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :grouped grouped
-                                 :leafiest leafiest})
-                  (when (seq leafiest)
-                    (rand-nth (val leafiest))))
-
                 ;; just sort by weight and choose uniformly from
                 ;; heaviest
                 :leaf1
@@ -245,17 +221,6 @@
                     (util/weighted-rand-nth (for [[w ps] grouped
                                                   p ps]
                                               [p w]))))
-
-                ;; select the path with highest likelihood
-                :lleaf1
-                (let [ltk (weights/likelihood-trek grammar wtrek)
-                      bigs-ltk (select-keys ltk bigs)]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :ltk ltk
-                                 :big-ltk bigs-ltk})
-                  (when (seq bigs-ltk)
-                    (last (keys (sort-by val bigs-ltk)))))
 
                 ;; choose random weighted based on likelihood
                 :lleaf2
