@@ -193,13 +193,13 @@ rS = #'\\s+'")
   (testing "reduce-wtrek-with-weights on :alts"
     (let [rwh #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      g1 %1 %2 :dleaf2 r/reducer-half))
+                      g1 %1 %2 :weight-dist r/reducer-half))
           rwl #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      g1 %1 %2 :dleaf2 (partial r/reducer-ladder [30 10 3 1])))
+                      g1 %1 %2 :weight-dist (partial r/reducer-ladder [30 10 3 1])))
           rw0 #(r/reduce-wtrek
                  g1 (r/reduce-wtrek-with-weights
-                      g1 %1 %2 :dleaf2 r/reducer-zero))]
+                      g1 %1 %2 :weight-dist r/reducer-zero))]
       (testing "[:foobar :alt 0] reduced by half"
         (let [w (rwh w1-all {[:foobar :alt 0] 1})]
           (is (= w
@@ -241,7 +241,7 @@ rS = #'\\s+'")
   (testing "reduce-wtrek-with-weights of :alt, :opt, :star nodes"
     (let [rw0 #(r/reduce-wtrek
                  g2 (r/reduce-wtrek-with-weights
-                      g2 %1 %2 :dleaf2 r/reducer-zero))]
+                      g2 %1 %2 :weight-dist r/reducer-zero))]
       (testing "[:r :cat 1 :opt 0 :alt 0] is 0"
         (let [w (rw0 w2-all {[:r :cat 1 :opt 0 :alt 0] 1})]
           (is (= w

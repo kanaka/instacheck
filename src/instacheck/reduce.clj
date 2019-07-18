@@ -6,14 +6,8 @@
             [instacheck.weights :as weights]
             [instacheck.codegen :as codegen]))
 
-(def memoized-tree-distances
-  (memoize util/tree-distances))
-(def memoized-paths-to-leaf
-  (memoize grammar/paths-to-leaf))
-(def memoized-trek
-  (memoize grammar/trek))
-
-;; ---
+(def memoized-distance-trek
+  (memoize weights/distance-trek))
 
 (defn reduce-wtrek
   "Takes a grammar and wtrek and returns a new reduced wtrek with all
@@ -121,49 +115,6 @@
 
 
 
-;; (defn- rule-leaf-immediate-dist
-;;   "How many weighted node are crossed from rule-nt to leaf-nt within
-;;   the same rule. If leaf-nt occurs multiple times then returns the
-;;   shortest depth. If rule-nt and leaf-nt are the same then returns 0."
-;;   [grammar rule-nt leaf-nt]
-;;   (let [paths (filter #(= rule-nt (first %))
-;;                       (grammar/paths-to-leaf grammar leaf-nt))]
-;;     (prn :rule-nt rule-nt :leaf-nt leaf-nt :paths paths)
-;;     (if (= rule-nt leaf-nt)
-;;       0
-;;       (apply min
-;;              (for [path paths]
-;;                (count (filter #(grammar/WEIGHTED %) path)))))))
-;;
-;; (defn- grammar-distances
-;;   [grammar & [start]]
-;;   (let [start (or start (:start (meta grammar)))
-;;         deps (util/tree-deps grammar)
-;;         dists (into
-;;                 {} (for [[rule-nt leaf-nts] deps]
-;;                      [rule-nt
-;;                       (into
-;;                         {} (for [leaf-nt leaf-nts]
-;;                              [leaf-nt
-;;                               (rule-leaf-immedate-dist
-;;                                 grammar rule-nt leaf-nt)]))]))]
-;;     (util/tree-distances grammar dists start)))
-;;
-;; (defn- wtrek-dists
-;;   [grammar start-nt]
-;;   (let [wtrek (grammar/wtrek grammar)]
-;;         gdist (grammar-distances grammar start-nt)]
-;;   )
-
-
-(def debug (atom nil))
-;; There is a problem that arises when we reduce the weight of
-;; a nil-ending path (:start/:opt) to 0. This implies infinite
-;; recursion because the remaining 0-ending path is the 1 or more
-;; portion. However, because we construct our recursvie generator by
-;; slicing a the smallest non-recursive tree for the inner generator,
-;; we avoid infinite recursion.
-
 (defn reduce-wtrek-with-weights
   "Takes a grammar, wtrek, a weights-to-reduce map, a reduce-mode
   keyword, and a reducer-fn. A path from weights-to-reduce is selected
@@ -191,91 +142,28 @@
                      (keys weights-to-reduce))
 ;;        _ (prn :bigs)
 ;;        _ (pprint bigs)
-        rpath (condp = reduce-mode
-                ;; just sort by weight and choose uniformly from
-                ;; heaviest
-                :leaf1
-                (let [grouped (group-by #(or (get wtrek %) 0)
-                                        bigs)
-;;                      _ (prn :grouped)
-;;                      _ (pprint (sort-by key grouped))
-                      heaviest (last (sort-by key grouped))]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :grouped grouped
-                                 :heaviest heaviest})
-                  (when (seq heaviest)
-                    (rand-nth (val heaviest))))
-
-                ;; sort by weight and choose random weighted
-                :leaf2
-                (let [grouped (group-by #(or (get wtrek %) 0)
-                                        bigs)
-;;                      _ (prn :grouped)
-;;                      _ (pprint (sort-by key grouped))
-                      ]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :grouped grouped})
-                  (when (seq grouped)
-                    (util/weighted-rand-nth (for [[w ps] grouped
-                                                  p ps]
-                                              [p w]))))
-
-                ;; choose random weighted based on likelihood
-                :lleaf2
-                (let [ltk (weights/likelihood-trek grammar wtrek)
-                      bigs-ltk (select-keys ltk bigs)]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :ltk ltk
-                                 :big-ltk bigs-ltk})
-                  (when (seq bigs-ltk)
-                    (util/weighted-rand-nth bigs-ltk)))
-
-                ;; sort by weight and then distance and choose
-                ;; uniformly from heaviest
-                :dleaf1
-                (let [distances (weights/distance-trek grammar)
-                      ;; _ (prn :distances distances)
-                      grouped (group-by (juxt #(or (get wtrek %) 0)
-                                              #(get distances %))
-                                        bigs)
-;;                      _ (prn :grouped)
-;;                      _ (pprint (sort-by key grouped))
-                      leafiest (last (sort-by key grouped))]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :distances distances
-                                 :grouped grouped
-                                 :leafiest leafiest})
-                  (when (seq leafiest)
-                    (rand-nth (val leafiest))))
-
-                ;; sort by weight * distance choose random weighted
-                :dleaf2
-                (let [distances (weights/distance-trek grammar)
-                      grouped (group-by #(or (get wtrek %) 0)
-                                        bigs)
-;;                      _ (prn :grouped)
-;;                      _ (pprint (sort-by key grouped))
-                      ]
-                  (reset! debug {:wtr weights-to-reduce
-                                 :wtrek wtrek
-                                 :grouped grouped})
-                  (when (seq grouped)
-                    (util/weighted-rand-nth (for [[w ps] grouped
-                                                  p ps]
-                                              [p (* w (get distances p))]))))
-
-                )]
-    (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
+        distances (memoized-distance-trek grammar)
+        grouped (group-by #(or (get wtrek %) 0)
+                          bigs)
+;;        (prn :grouped)
+;;        (pprint (sort-by key grouped))
+        weighted-paths (for [[w ps] grouped
+                             p ps]
+                         [p (* w (condp = reduce-mode
+                                   ;; choice weighted by weight
+                                   :weight 1
+                                   ;; choice weighted by weight * distance
+                                   :weight-dist (get distances p)))])
+        rpath (when (seq grouped)
+                (util/weighted-rand-nth weighted-paths))]
+;;    (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
     (if rpath
       (assoc wtrek rpath (reducer-fn
                            (get wtrek rpath)
                            (get weights-to-reduce rpath)))
-      (do (println "******************* no rpath *******************")
-          wtrek)))
+      (do
+;;        (println "******************* no rpath *******************")
+        wtrek)))
 
   )
 
