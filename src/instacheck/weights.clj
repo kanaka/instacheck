@@ -4,6 +4,9 @@
             
             [instacheck.grammar :as grammar]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Core weight functions
+
 (defn removed-node?
   "Takes path to a grammar node and returns true if all the child
   weights of this node are 0. Only paths ending in :alt, :ord, :opt,
@@ -122,7 +125,8 @@
   [grammar parse-result]
   (filter-trek-weighted (path-log-trek grammar parse-result)))
 
-;; Misc
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Printing and saving weights
 
 (defn print-weights [weights]
   (let [sm (sorted-map-by #(compare (str %1) (str %2)))]
@@ -131,4 +135,104 @@
 (defn save-weights [path weights]
   (io/make-parents path)
   (spit path (with-out-str (print-weights weights))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Other weight related treks
+
+(defn- ltrek*
+  "Given a grammar and a wtrek, update ltrek with likelihood of
+  reaching every node of grammar."
+  [grammar wtrek path node ltrek likelihood]
+  (let [tag (:tag node)
+        ltrek (update ltrek path (fnil + 0) likelihood)]
+;;   (prn :path path :tag tag :likelihood likelihood)
+    (cond
+      (< likelihood 0.001)
+      ltrek
+
+      (#{:string :regexp :epsilon} tag)
+      ltrek
+
+      (= :nt tag)
+      (let [nt (:keyword node)]
+        (recur grammar wtrek [nt] (get grammar nt) ltrek likelihood))
+
+      (#{:cat :alt :ord :star :opt} tag)
+      (let [child-paths (grammar/children-of-node grammar (conj path tag))
+            child-nodes (cond
+                          (#{:cat :alt} tag)  (:parsers node)
+                          (= :ord tag)        [(:parser1 node) (:parser2 node)]
+                          (#{:star :opt} tag) [{:tag :epsilon} (:parser node)])
+            total-weight (apply + (map #(get wtrek % 100) child-paths))]
+;;        (println "  " :child-paths child-paths)
+        (reduce
+          (fn [lt [p n]]
+            (ltrek* grammar wtrek p n lt
+                    (if (= :cat tag)
+                      likelihood
+                      (* likelihood (/ (get wtrek p) total-weight)))))
+          ltrek
+          (map vector child-paths child-nodes)))
+
+      (= :plus tag)
+      (recur grammar wtrek (conj path :plus 0) (:parser node) ltrek likelihood))))
+
+(defn likelihood-trek
+  [grammar wtrek]
+  (let [start (:start (meta grammar))]
+    (ltrek* grammar wtrek [start] (get grammar start) {} 1)))
+
+(defn terminal-likelihood-trek
+  [grammar wtrek]
+  (let [tk (grammar/trek grammar)
+        ttk (into {} (filter (comp grammar/TERMINAL val) tk))]
+    (select-keys (likelihood-trek grammar wtrek) (keys ttk))))
+
+(defn- dtrek*
+  "Given a grammar and a wtrek, update dtrek with distance to reach
+  every node of grammar."
+  [grammar path node dtrek dist]
+  (let [tag (:tag node)]
+;;   (prn :path path :tag tag :dist dist)
+    (cond
+      (contains? dtrek path)
+      dtrek
+
+      (#{:string :regexp :epsilon} tag)
+      (assoc dtrek path dist)
+
+      (= :nt tag)
+      (let [nt (:keyword node)]
+        (recur grammar [nt] (get grammar nt)
+               (assoc dtrek path dist) (inc dist)))
+
+      (#{:cat :alt :ord :star :opt} tag)
+      (let [child-paths (grammar/children-of-node grammar (conj path tag))
+            child-nodes (cond
+                          (#{:cat :alt} tag)  (:parsers node)
+                          (= :ord tag)        [(:parser1 node) (:parser2 node)]
+                          (#{:star :opt} tag) [{:tag :epsilon} (:parser node)])
+            next-dist (if (= (count path) 1) (inc dist) dist)]
+;;        (println "  " :child-paths child-paths)
+        (reduce
+          (fn [dt [p n]]
+            (assoc
+              (dtrek* grammar p n dt (inc next-dist))
+              (conj path tag) next-dist
+              p (inc next-dist)))
+          (assoc dtrek path dist)
+          ;;(assoc dtrek path dist (conj path tag) (inc dist))
+          (map vector child-paths child-nodes)))
+
+      (= :plus tag)
+      (let [next-dist (if (= (count path) 1) (inc dist) dist)]
+        (recur grammar (conj path :plus 0) (:parser node)
+               (assoc dtrek
+                      path dist
+                      (conj path :plus) next-dist) (inc next-dist))))))
+
+(defn distance-trek
+  [grammar]
+  (let [start (:start (meta grammar))]
+    (dtrek* grammar [start] (get grammar start) {} 0)))
 
