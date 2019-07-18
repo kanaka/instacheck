@@ -3,6 +3,7 @@
             [clojure.test :refer [deftest testing is]]
             [clojure.test.check.generators :as gen]
             [instacheck.grammar :as g]
+            [instacheck.weights :as w]
             [instacheck.core :as core]))
 
 (def ebnf1 "
@@ -60,7 +61,7 @@ r1 = 'a' / '<' r1 '>'")
       (let [ctx2 {:weights-res (atom {})}
             gen2 (core/ebnf->gen ctx2 g2)
             wa2 @(:weights-res ctx2)
-            g2w (g/wtrek g2)]
+            g2w (w/wtrek g2)]
         (is (re-seq #"(?s)g \(assoc g :foobar gen-foobar\).*g \(assoc g :start gen-start\)"
                     (:fn-src (meta gen2))))
         (is (= wa2
@@ -93,26 +94,26 @@ r1 = 'a' / '<' r1 '>'")
         (is (every? #(= "c" %) sampsB))))
 
     (testing "non-zero on a single path of an :alt"
-      (let [wa4 (g/wtrek g4)
+      (let [wa4 (w/wtrek g4)
             gen4 (core/ebnf->gen {:weights wa4} g4)
             samps (take 100 (gen/sample-seq gen4))]
         (is (every? #(= "d" %) samps))))
 
     (testing "non-zero on a single path of an :alt"
-      (let [wa4 (g/wtrek g4)
+      (let [wa4 (w/wtrek g4)
             gen4 (core/ebnf->gen {:weights wa4} g4)
             samps (take 100 (gen/sample-seq gen4))]
         (is (every? #(= "d" %) samps))))
 
     (testing "self-recursion"
-      (let [wa5 (g/wtrek g5)
+      (let [wa5 (w/wtrek g5)
             gen5 (core/ebnf->gen {:weights wa5} g5)
             samps (take 50 (gen/sample-seq gen5))]
         (is (= 50 (count samps))
             (every? #(re-seq #"<*.*>*" %) samps))))
 
     (testing "self-recursion containing :ord"
-      (let [wa6 (g/wtrek g6)
+      (let [wa6 (w/wtrek g6)
             gen6 (core/ebnf->gen {:weights wa6} g6)
             samps (take 50 (gen/sample-seq gen6))]
         (is (= 50 (count samps))

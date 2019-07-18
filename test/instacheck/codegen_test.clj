@@ -3,7 +3,8 @@
             [clojure.test :refer [deftest testing is]]
             [clojure.test.check.generators :as gen]
             [instacheck.grammar :as g]
-            [instacheck.codegen :as cg]))
+            [instacheck.codegen :as cg]
+            [instacheck.weights :as w]))
 
 (def ebnf1 "
 r1 = r2
@@ -139,7 +140,7 @@ r1 = 'i' #'[0-9]*'")
           src2 (cg/grammar->generator-func-source ctx2 g5)
           wa1 @(:weights-res ctx1)
           wa2 @(:weights-res ctx2)
-          g5w (g/wtrek g5)]
+          g5w (w/wtrek g5)]
       (is (re-seq #"(?s)\(def gen-foobar.*\).*\(def gen-start.*\)"
                   src1))
       (is (re-seq #"(?s)\(assoc g :foobar gen-foobar\).*\(assoc g :start gen-start\)"

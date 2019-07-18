@@ -3,6 +3,7 @@
             [clojure.string :as string]
             [instaparse.core :as instaparse]
             [instacheck.core :as c]
+            [instacheck.weights :as w]
             [instacheck.grammar :as g]))
 
 (def ebnf1 "
@@ -312,7 +313,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              [:foobar :alt 1 :cat 0] "ba"
              [:foobar :alt 1 :cat 1 :alt 0] "r"
              [:foobar :alt 1 :cat 1 :alt 1] "z"}))
-    (is (= (g/wtrek g1 25)
+    (is (= (w/wtrek g1 25)
            {[:start :alt 0] 25
             [:start :alt 1] 25
             [:foobar :alt 0] 25
@@ -347,7 +348,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              [:foobar :alt 1 :cat 0] "ba"
              [:foobar :alt 1 :cat 1 :alt 0] "r"
              [:foobar :alt 1 :cat 1 :alt 1] "z"}))
-    (is (= (g/wtrek g5 35)
+    (is (= (w/wtrek g5 35)
            {[:start :alt 0] 10
             [:start :alt 1] 35
             [:start :alt 2] 20
@@ -365,7 +366,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1] {:weight 40},
             [:foobar :alt 1 :cat 1 :alt 0] {:weight 50},
             [:foobar :alt 1 :cat 1 :alt 1] {:weight 60}}))
-    (is (= (g/wtrek g5)
+    (is (= (w/wtrek g5)
            {[:start :alt 0] 10,
             [:start :alt 1] 100,
             [:start :alt 2] 20,
@@ -373,7 +374,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
             [:foobar :alt 1] 40,
             [:foobar :alt 1 :cat 1 :alt 0] 50,
             [:foobar :alt 1 :cat 1 :alt 1] 60}))
-    (is (= (g/wtrek g5 234)
+    (is (= (w/wtrek g5 234)
            {[:start :alt 0] 10,
             [:start :alt 1] 234,
             [:start :alt 2] 20,
@@ -404,244 +405,3 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
       (is (= g9 (g/trek->grammar (g/trek g9)))))))
 
 
-;; weight functions
-
-(deftest removed-node?-test
-  (testing "removed-node?"
-    (is (= (nil? (g/removed-node? g1 w1 [:foobar :alt]))
-           false))
-    (is (= (nil? (g/removed-node? g1 w1 [:start :alt]))
-           true))
-    (is (= (nil? (g/removed-node? g1 w1 [:foobar :alt 1 :cat 1 :alt]))
-           false))
-    (is (= (nil? (g/removed-node? g1 w1 [:notthere :alt]))
-           true))))
-
-(deftest filter-trek-weighted-test
-  (testing "filter-trek-weighted"
-    (let [m {[:r :alt 0] 100
-             [:r :alt 0 :plus 0] 100
-             [:r :alt 1 :cat 1 :alt 0] 100
-             [:r :alt 1 :cat 1 :alt 0 :opt 0] 100
-             [:r :alt 1 :cat 1 :ord 0] 100
-             [:r] 100
-             [:r :cat 1] 100}]
-      (is (= (g/filter-trek-weighted m)
-             {[:r :alt 0] 100
-              [:r :alt 1 :cat 1 :alt 0] 100
-              [:r :alt 1 :cat 1 :alt 0 :opt 0] 100
-              [:r :alt 1 :cat 1 :ord 0] 100})))))
-
-(deftest wtrek-test
-  (testing "wtrek"
-    (is (= (g/wtrek g3)
-           {[:r2 :alt 0] 100,
-            [:r1 :alt 0] 100,
-            [:r1 :alt 1] 100,
-            [:r2 :alt 1] 100}))
-    (is (= (g/wtrek g3 12)
-           {[:r2 :alt 0] 12,
-            [:r1 :alt 0] 12,
-            [:r1 :alt 1] 12,
-            [:r2 :alt 1] 12}))))
-
-(deftest path-log-trek-test
-  (testing "path-log-trek"
-    (is (= (g/path-log-trek g9 (c/parse p9 "a"))
-           {[:r :cat 1 :opt 0 :alt 0] 0,
-            [:r] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 0] 0,
-            [:r :cat 1 :opt nil] 1,
-            [:r :cat 1 :opt 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 0,
-            [:r :cat 0] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1] 0,
-            [:r :cat 1] 1,
-            [:r :cat 1 :opt 0 :alt 1] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
-    (is (= (g/path-log-trek g9 (c/parse p9 "acdccdeeec"))
-           {[:r :cat 1 :opt 0 :alt 0] 0,
-            [:r] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 0] 4,
-            [:r :cat 1 :opt nil] 0,
-            [:r :cat 1 :opt 0] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 7,
-            [:r :cat 0] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0] 6,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1] 6,
-            [:r :cat 1] 1,
-            [:r :cat 1 :opt 0 :alt 1] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star nil] 9,
-            [:r :cat 1 :opt 0 :alt 1 :star 0] 10,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 4,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 2,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 3}))))
-
-(deftest path-log-wtrek-test
-  (testing "wtrek, path-log-wtrek"
-    (testing "g6"
-      (is (= (g/wtrek g6)
-             {[:r :opt 0] 100,
-              [:r :opt nil] 100,
-              [:r :opt 0 :cat 1 :opt 0] 100,
-              [:r :opt 0 :cat 1 :opt nil] 100}))
-      (is (= (g/path-log-wtrek g6 (c/parse p6 ""))
-             {[:r :opt 0] 0,
-              [:r :opt nil] 1,
-              [:r :opt 0 :cat 1 :opt 0] 0,
-              [:r :opt 0 :cat 1 :opt nil] 0}))
-      (is (= (g/path-log-wtrek g6 (c/parse p6 "a"))
-             {[:r :opt 0] 1,
-              [:r :opt nil] 0,
-              [:r :opt 0 :cat 1 :opt 0] 0,
-              [:r :opt 0 :cat 1 :opt nil] 1}))
-      (is (= (g/path-log-wtrek g6 (c/parse p6 "ab"))
-             {[:r :opt 0] 1,
-              [:r :opt nil] 0,
-              [:r :opt 0 :cat 1 :opt 0] 1,
-              [:r :opt 0 :cat 1 :opt nil] 0})))
-
-    (testing "g7"
-      (is (= (g/wtrek g7)
-             {[:r :star 0] 100,
-              [:r :star nil] 100,
-              [:r :star 0 :cat 1 :star 0] 100,
-              [:r :star 0 :cat 1 :star nil] 100}))
-      (is (= (g/path-log-wtrek g7 (c/parse p7 ""))
-             {[:r :star 0] 0,
-              [:r :star nil] 1,
-              [:r :star 0 :cat 1 :star 0] 0,
-              [:r :star 0 :cat 1 :star nil] 0}))
-      (is (= (g/path-log-wtrek g7 (c/parse p7 "a"))
-             {[:r :star 0] 1,
-              [:r :star nil] 0,
-              [:r :star 0 :cat 1 :star 0] 0,
-              [:r :star 0 :cat 1 :star nil] 1}))
-      (is (= (g/path-log-wtrek g7 (c/parse p7 "ab"))
-             {[:r :star 0] 2,
-              [:r :star nil] 1,
-              [:r :star 0 :cat 1 :star 0] 1,
-              [:r :star 0 :cat 1 :star nil] 1}))
-      (is (= (g/path-log-wtrek g7 (c/parse p7 "aa"))
-             {[:r :star 0] 2,
-              [:r :star nil] 1,
-              [:r :star 0 :cat 1 :star 0] 0,
-              [:r :star 0 :cat 1 :star nil] 2}))
-      (is (= (g/path-log-wtrek g7 (c/parse p7 "abb"))
-             {[:r :star 0] 3,
-              [:r :star nil] 2,
-              [:r :star 0 :cat 1 :star 0] 2,
-              [:r :star 0 :cat 1 :star nil] 1})))
-
-    (testing "g8"
-      (is (= (g/wtrek g8)
-             {[:r :cat 1 :star 0] 100,
-              [:r :cat 1 :star nil] 100,
-              [:r :cat 2 :opt 0] 100,
-              [:r :cat 2 :opt nil] 100}))
-      (is (= (g/path-log-wtrek g8 (c/parse p8 "a"))
-             {[:r :cat 1 :star 0] 0,
-              [:r :cat 1 :star nil] 1,
-              [:r :cat 2 :opt 0] 0,
-              [:r :cat 2 :opt nil] 1}))
-      (is (= (g/path-log-wtrek g8 (c/parse p8 "ab"))
-             {[:r :cat 1 :star 0] 1,
-              [:r :cat 1 :star nil] 1,
-              [:r :cat 2 :opt 0] 0,
-              [:r :cat 2 :opt nil] 1}))
-      (is (= (g/path-log-wtrek g8 (c/parse p8 "abc"))
-             {[:r :cat 1 :star 0] 1,
-              [:r :cat 1 :star nil] 1,
-              [:r :cat 2 :opt 0] 1,
-              [:r :cat 2 :opt nil] 0}))
-      (is (= (g/path-log-wtrek g8 (c/parse p8 "ac"))
-             {[:r :cat 1 :star 0] 0,
-              [:r :cat 1 :star nil] 1,
-              [:r :cat 2 :opt 0] 1,
-              [:r :cat 2 :opt nil] 0}))
-      (is (= (g/path-log-wtrek g8 (c/parse p8 "abbc"))
-             {[:r :cat 1 :star 0] 2,
-              [:r :cat 1 :star nil] 1,
-              [:r :cat 2 :opt 0] 1,
-              [:r :cat 2 :opt nil] 0})))
-
-    (testing "g9"
-      (is (= (g/wtrek g9)
-             {[:r :cat 1 :opt 0 :alt 0] 100,
-              [:r :cat 1 :opt nil] 100,
-              [:r :cat 1 :opt 0] 100,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 100,
-              [:r :cat 1 :opt 0 :alt 1] 100,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 100,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 100,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 100,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 100,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 100}))
-      (is (= (g/path-log-wtrek g9 (c/parse p9 "a"))
-             {[:r :cat 1 :opt 0 :alt 0] 0,
-              [:r :cat 1 :opt nil] 1,
-              [:r :cat 1 :opt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
-      (is (= (g/path-log-wtrek g9 (c/parse p9 "ab"))
-             {[:r :cat 1 :opt 0 :alt 0] 1,
-              [:r :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
-      (is (= (g/path-log-wtrek g9 (c/parse p9 "ae"))
-             {[:r :cat 1 :opt 0 :alt 0] 0,
-              [:r :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 1}))
-      (is (= (g/path-log-wtrek g9 (c/parse p9 "acd"))
-             {[:r :cat 1 :opt 0 :alt 0] 0,
-              [:r :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 2,
-              [:r :cat 1 :opt 0 :alt 1] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 2,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
-      (is (= (g/path-log-wtrek g9 (c/parse p9 "accdcdee"))
-             {[:r :cat 1 :opt 0 :alt 0] 0,
-              [:r :cat 1 :opt nil] 0,
-              [:r :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 7,
-              [:r :cat 1 :opt 0 :alt 1] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 8,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 9,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 2,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 3,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 2})))))
-
-(deftest print-weights-test
-  (testing "print-weights test"
-    (is (= (with-out-str
-             (g/print-weights {[:r1 :alt 1] 20
-                               [:r1 :alt 2] 30
-                               [:r1 :alt 0] 10}))
-           "{[:r1 :alt 0] 10, [:r1 :alt 1] 20, [:r1 :alt 2] 30}\n"))))

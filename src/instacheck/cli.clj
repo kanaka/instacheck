@@ -12,6 +12,7 @@
 
             [instacheck.core :as core]
             [instacheck.grammar :as grammar]
+            [instacheck.weights :as weights]
             [instacheck.codegen :as codegen]
             [instacheck.util :refer [pr-err]]))
 
@@ -136,7 +137,7 @@
                    (System/exit 1))))]
     ;; Update the ctx result weights
     (reset! (:weights-res ctx) (:full-wtrek data))
-    (grammar/print-weights (:full-wtrek data))))
+    (weights/print-weights (:full-wtrek data))))
 
 ;; do-check
 
@@ -203,7 +204,7 @@
             generator (core/ebnf->gen ctx parser)
             qc-res (check-and-report ctx generator run-dir cmd opts)]
         (pr-err "Saving weights to" (str weights-file))
-        (grammar/save-weights weights-file @(:weights-res ctx))
+        (weights/save-weights weights-file @(:weights-res ctx))
         (pr-err "Saving result map to" (str res-file))
         (spit res-file qc-res)
         (println "Result:")
@@ -260,7 +261,7 @@
                         (select-keys opts [:runs :iterations])))]
 
     (when-let [weights-output (:weights-output opts)]
-      (grammar/save-weights weights-output @(:weights-res ctx)))
+      (weights/save-weights weights-output @(:weights-res ctx)))
 
     (if (= false res)
       (System/exit 1)

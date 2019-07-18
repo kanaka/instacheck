@@ -3,6 +3,7 @@
             [clojure.set :as set]
             [instacheck.util :as util]
             [instacheck.grammar :as grammar]
+            [instacheck.weights :as weights]
             [instacheck.codegen :as codegen]))
 
 (def memoized-tree-distances
@@ -464,7 +465,7 @@
       grammar, then rules are removed that cannot be reached (directly
       or indirectly) from the start rule/production.."
   [grammar {:keys [wtrek start removed] :as ctx}]
-  (let [wtrek (or wtrek (grammar/wtrek grammar 100))
+  (let [wtrek (or wtrek (weights/wtrek grammar 100))
         start (or start (:start (meta grammar)))
         ;; Remove rules listed in removed
         g1 (select-keys

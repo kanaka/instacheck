@@ -6,6 +6,7 @@
             [instaparse.core :as instaparse]
 
             [instacheck.grammar :as grammar]
+            [instacheck.weights :as weights]
             [instacheck.codegen :as codegen]
 
             ;; Convenient to have already loaded for testing
@@ -20,9 +21,9 @@
 (def update-in-grammar grammar/update-in-grammar)
 (def assoc-in-grammar  grammar/assoc-in-grammar)
 (def trek              grammar/trek)
-(def wtrek             grammar/wtrek)
-(def path-log-wtrek    grammar/path-log-wtrek)
-(def save-weights      grammar/save-weights)
+(def wtrek             weights/wtrek)
+(def path-log-wtrek    weights/path-log-wtrek)
+(def save-weights      weights/save-weights)
 
 (def grammar->generator-func-source codegen/grammar->generator-func-source)
 (def grammar->generator-defs-source codegen/grammar->generator-defs-source)
@@ -171,7 +172,7 @@
   [parser text & [id]]
   (let [grammar (grammar/parser->grammar parser)
         parsed (parse parser text)
-        wtrek (grammar/path-log-wtrek grammar parsed)]
+        wtrek (weights/path-log-wtrek grammar parsed)]
     {:id id
      :parsed parsed
      :wtrek wtrek}))
