@@ -59,7 +59,9 @@
                  [nil "--reduce-fails"
                   "After each run that finds a failure, reduce the weight of the "
                   :default 1
-                  :parse-fn #(Integer. %)]]})
+                  :parse-fn #(Integer. %)]]
+   "parse"       [[nil "--ebnf-output EBNF-OUTPUT"
+                   "Write subset of original EBNF to file that represents the parsed text."]]})
 
 ;; Gather up the general and command summary information
 (def cli-summary
@@ -134,10 +136,21 @@
                  (let [{:keys [text failure location]} (ex-data e)]
                    (println (str "Parse error in '" location "':"))
                    (println failure)
-                   (System/exit 1))))]
+                   (System/exit 1))))
+        weights (:full-wtrek data)]
+    (when (:ebnf-output ctx)
+      (let [grammar (igrammar/parser->grammar parser)
+            pruned-grammar (ireduce/prune-grammar
+                             grammar {:wtrek weights})
+            order (into {} (filter #(= 1 (count (key %)))
+                                   (iweights/distance-trek grammar)))
+            pruned-ebnf (igrammar/grammar->ebnf
+                          (sort-by #(get order [(key %)])
+                                   pruned-grammar))]
+        (spit (:ebnf-output ctx) (str pruned-ebnf "\n"))))
     ;; Update the ctx result weights
-    (reset! (:weights-res ctx) (:full-wtrek data))
-    (iweights/print-weights (:full-wtrek data))))
+    (reset! (:weights-res ctx) weights)
+    (iweights/print-weights weights)))
 
 ;; do-check
 
@@ -238,7 +251,7 @@
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start
                                       :namespace :function
-                                      :grammar-updates])
+                                      :grammar-updates :ebnf-output])
                    {:weights (merge comment-weights
                                     (:weights opts))
                     :weights-res (atom {})})
