@@ -14,9 +14,14 @@
   parent weights reduced to their largest child weight (if all child
   weights are smaller).
 
+  If the optional reduced-subset is then only those node will be
+  propagated. If reduced-subset is not specified then all
+  reducible/weighted nodes will be considered. The former may result
+  in a wtrek that is not fully reduced but the latter can take a while
+  for large grammars/wtreks.
 
   Algorithm/Pseudocode:
-    - set pend to contain all weighted nodes in the tree.
+    - pend <= reduced-subset OR all weighted nodes in the tree
     - while pend:
       - node   <= pop(pend)
       - mcw    <= get max child weight
@@ -45,10 +50,12 @@
   pending node to remove. The call to parent-search may add more nodes
   to be removed but already removed nodes will not be added again so
   the process will eventually terminate."
-  [grammar wtrek]
+  [grammar wtrek & [reduced-subset]]
   (loop [wtrek wtrek
          pend (set (filter #(grammar/WEIGHTED (last %))
-                           (map (comp pop key) wtrek)))]
+                           (map (comp pop key)
+                                (or reduced-subset
+                                    (weights/wtrek grammar)))))]
     (if (seq pend)
       (let [[node & pend-left] pend
             kids (grammar/children-of-node grammar node)
