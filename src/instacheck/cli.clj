@@ -10,11 +10,11 @@
 
             [instaparse.core :as instaparse]
 
-            [instacheck.core :as core]
-            [instacheck.grammar :as grammar]
-            [instacheck.weights :as weights]
-            [instacheck.codegen :as codegen]
-            [instacheck.util :refer [pr-err]]))
+            [instacheck.core :as icore]
+            [instacheck.grammar :as igrammar]
+            [instacheck.weights :as iweights]
+            [instacheck.reduce :as ireduce]
+            [instacheck.util :as iutil :refer [pr-err]]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Command line usage of ebnf
@@ -99,8 +99,8 @@
   [ctx parser clj-ns]
   (when (not clj-ns)
     (usage ["clj mode requires namespace"]))
-  (let [grammar (grammar/parser->grammar parser)]
-    (println (core/grammar->ns (assoc ctx :namespace clj-ns) grammar))))
+  (let [grammar (igrammar/parser->grammar parser)]
+    (println (icore/grammar->ns (assoc ctx :namespace clj-ns) grammar))))
 
 ;; do-samples
 
@@ -117,7 +117,7 @@
   [ctx parser dir number]
   (when (not dir)
     (usage ["samples mode requires SAMPLE_DIR"]))
-  (let [genfn (core/ebnf->gen ctx parser)
+  (let [genfn (icore/ebnf->gen ctx parser)
         samples (gen/sample genfn number)]
     (output-samples ctx dir samples)))
 
@@ -129,7 +129,7 @@
     (usage ["parse mode requires FILE list"]))
   (let [texts-ids (map #(vector (slurp %) %) files)
         data (try
-               (core/parse-wtreks parser texts-ids)
+               (icore/parse-wtreks parser texts-ids)
                (catch Exception e
                  (let [{:keys [text failure location]} (ex-data e)]
                    (println (str "Parse error in '" location "':"))
@@ -137,7 +137,7 @@
                    (System/exit 1))))]
     ;; Update the ctx result weights
     (reset! (:weights-res ctx) (:full-wtrek data))
-    (weights/print-weights (:full-wtrek data))))
+    (iweights/print-weights (:full-wtrek data))))
 
 ;; do-check
 
@@ -181,7 +181,7 @@
                       (reset! cur-state (:type r))
                       (pr-err (str "NEW STATE: " (name (:type r))))))
         qc-opts (merge opts {:report-fn report-fn})
-        res (core/instacheck check-fn generator qc-opts)]
+        res (icore/instacheck check-fn generator qc-opts)]
     res))
 
 (defn do-check
@@ -201,10 +201,10 @@
                       dir)
             res-file (io/file run-dir "result.edn")
             weights-file (io/file run-dir "weights.edn")
-            generator (core/ebnf->gen ctx parser)
+            generator (icore/ebnf->gen ctx parser)
             qc-res (check-and-report ctx generator run-dir cmd opts)]
         (pr-err "Saving weights to" (str weights-file))
-        (weights/save-weights weights-file @(:weights-res ctx))
+        (iweights/save-weights weights-file @(:weights-res ctx))
         (pr-err "Saving result map to" (str res-file))
         (spit res-file qc-res)
         (println "Result:")
@@ -233,8 +233,8 @@
         _ (when (:verbose opts) (pr-err "Loading parser from" ebnf))
         ebnf-parser (instaparse/parser (slurp ebnf))
         _ (when (:verbose opts) (pr-err "Extracting comment weights"))
-        comment-weights (grammar/comment-trek
-                          (grammar/parser->grammar ebnf-parser)
+        comment-weights (igrammar/comment-trek
+                          (igrammar/parser->grammar ebnf-parser)
                           :weight)
         ctx (merge (select-keys opts [:debug :verbose :start
                                       :namespace :function
@@ -261,7 +261,7 @@
                         (select-keys opts [:runs :iterations])))]
 
     (when-let [weights-output (:weights-output opts)]
-      (weights/save-weights weights-output @(:weights-res ctx)))
+      (iweights/save-weights weights-output @(:weights-res ctx)))
 
     (if (= false res)
       (System/exit 1)

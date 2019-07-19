@@ -185,7 +185,7 @@
                 :parsed PARSED
                 :wtrek  {PATH WEIGHT ...}}
                 ...]
-       :full  {PATH WEIGHT ...}}
+       :full-wtrek {PATH WEIGHT ...}}
 
   The :parts value is a vector of the parse-wtrek result for each
   texts-ids. The :full-wtrek has merged weight counts from all :parts
