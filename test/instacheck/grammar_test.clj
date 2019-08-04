@@ -10,13 +10,6 @@
 start = 'qux' | foobar ;
 foobar = 'foo' | 'ba' ( 'r' | 'z' ) ;")
 
-(def w1 {[:foobar :alt 0] 0
-         [:foobar :alt 1] 0
-         [:foobar :alt 1 :cat 1 :alt 0] 0
-         [:foobar :alt 1 :cat 1 :alt 1] 0
-         [:start :alt 0] 0
-         [:start :alt 1] 50})
-
 (def ebnf2 "
 foo = bar ;
 bar = 'bar' ;
@@ -29,7 +22,7 @@ ep = ''")
 
 (def ebnf3 "
 r1 = r2 | r3
-r2 = ( r3 | 'm' r3+)
+r2 = ( r3 | 'm' r3+ )
 r3 = 'x'")
 
 (def ebnf4 "
@@ -209,7 +202,7 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
                         :parser1 {:tag :string, :string "e"},
                         :parser2 {:tag :string, :string "f"}}}))
       (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt nil])
-             nil))
+             {:tag :epsilon}))
       (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 0])
              {:tag :string :string "d"}))
       (is (= (g/get-in-grammar g4 [:x1 :cat 1 :star 0 :alt 2 :opt 0 :ord 1 :ord 0])
@@ -245,41 +238,6 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
                                      {:tag :string, :string "m"})},
            :r3 {:tag :nt,  :keyword :gen/char-ascii}})))
 
-(deftest children-of-node-test
-  (testing "children-of-node"
-    (testing "Children of an alt node"
-      (is (= (g/children-of-node g1 [:foobar :alt])
-             '([:foobar :alt 0]
-               [:foobar :alt 1]))))
-    (testing "Children of an alt node's child (adding the type should be the same behavior)"
-      (is (= (g/children-of-node g1 [:foobar :alt 1])
-             (g/children-of-node g1 [:foobar :alt 1 :cat])
-             '([:foobar :alt 1 :cat 0]
-               [:foobar :alt 1 :cat 1]))))
-    (testing "Wrong type should nil"
-      (is (= (g/children-of-node g1 [:foobar :ord 1])
-             nil)))
-
-    (testing "children of a cat node"
-      (is (= (g/children-of-node g8 [:r :cat])
-             '([:r :cat 0]
-               [:r :cat 1]
-               [:r :cat 2]))))
-    (testing "children of an opt node"
-      (is (= (g/children-of-node g8 [:r :cat 2])
-             (g/children-of-node g8 [:r :cat 2 :opt])
-             '([:r :cat 2 :opt nil]
-               [:r :cat 2 :opt 0]))))
-    (testing "children of a star node"
-      (is (= (g/children-of-node g8 [:r :cat 1])
-             (g/children-of-node g8 [:r :cat 1 :star])
-             '([:r :cat 1 :star nil]
-               [:r :cat 1 :star 0]))))
-    (testing "children of a plus node"
-      (is (= (g/children-of-node g8 [:r :cat 0])
-             (g/children-of-node g8 [:r :cat 0 :plus])
-             '([:r :cat 0 :plus 0]))))))
-
 (deftest paths-to-leaf-test
   (testing "paths-to-leaf"
     (is (= (g/paths-to-leaf g1 :start)
@@ -297,9 +255,64 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              [:r2 :alt 0]
              [:r2 :alt 1 :cat 1 :plus 0]}))))
 
-(deftest get-parents-test
-  ;; TOOD: get-parents and get-weighted-parent tests
-  )
+(deftest get-descendants-test
+  ;; TODO: more get-descendants tests
+  (testing "get removed/zero'd descendants"
+    (let [w (merge (w/wtrek g1 100)
+                   {[:foobar :alt 1 :cat 1 :alt 0] 0
+                    [:foobar :alt 1 :cat 1 :alt 1] 0})]
+
+      (is (= (g/get-descendants g1 [:start] #(w/removed-node? g1 w %))
+             [[:foobar :alt 1 :cat 1]])))))
+
+(deftest get-ancestors-test
+  ;; TODO: more get-ancestors and get-weighted-ancestors tests
+  (testing "basic get-ancestors tests with identity"
+    (is (= (g/get-ancestors g1 [:foobar :alt 1] identity)
+           #{[:foobar :alt]}))
+    (is (= (g/get-ancestors g1 [:foobar :alt] identity)
+           #{[:foobar]})))
+  (testing "basic get-ancestors tests with WEIGHTED"
+    (is (= (g/get-ancestors g1 [:foobar :alt 1] #(g/WEIGHTED (last %)))
+           #{[:foobar :alt]}))
+    (is (= (g/get-ancestors g1 [:foobar :alt] #(g/WEIGHTED (last %)))
+           (g/get-ancestors g1 [:foobar] #(g/WEIGHTED (last %)))
+           #{[:start :alt]}))))
+
+(deftest children-of-node-test
+  (testing "children-of-node"
+    (testing "Children of an alt node"
+      (is (= (g/children-of-node g1 [:foobar :alt])
+             [[:foobar :alt 0]
+              [:foobar :alt 1]]))))
+    (testing "Children of an alt node's child (adding the type should be the same behavior)"
+      (is (= (g/children-of-node g1 [:foobar :alt 1])
+             (g/children-of-node g1 [:foobar :alt 1 :cat])
+             [[:foobar :alt 1 :cat 0]
+              [:foobar :alt 1 :cat 1]])))
+    (testing "Wrong type should nil"
+      (is (= (g/children-of-node g1 [:foobar :ord 1])
+             nil)))
+
+    (testing "children of a cat node"
+      (is (= (g/children-of-node g8 [:r :cat])
+             [[:r :cat 0]
+              [:r :cat 1]
+              [:r :cat 2]])))
+    (testing "children of an opt node"
+      (is (= (g/children-of-node g8 [:r :cat 2])
+             (g/children-of-node g8 [:r :cat 2 :opt])
+             [[:r :cat 2 :opt nil]
+              [:r :cat 2 :opt 0]])))
+    (testing "children of a star node"
+      (is (= (g/children-of-node g8 [:r :cat 1])
+             (g/children-of-node g8 [:r :cat 1 :star])
+             [[:r :cat 1 :star nil]
+              [:r :cat 1 :star 0]])))
+    (testing "children of a plus node"
+      (is (= (g/children-of-node g8 [:r :cat 0])
+             (g/children-of-node g8 [:r :cat 0 :plus])
+             [[:r :cat 0 :plus 0]]))))
 
 
 ;; trek functions

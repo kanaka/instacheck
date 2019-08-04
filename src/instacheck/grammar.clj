@@ -10,6 +10,7 @@
 ;; Instacheck Grammar Handling
 
 (def LEAF-TAGS #{:nt :string :regexp :epsilon})
+(def TERMINAL-TAGS #{:string :regexp :epsilon})
 (def WEIGHTED  #{:alt :ord :star :opt})
 (defn CHILD-EDGE [e] (or (nil? e) (number? e)))
 (def NIL-EDGE  #{:star :opt})
@@ -88,7 +89,11 @@
 	(and (= t2 1) (:parser2 g))
 	(recur (:parser2 g) ts)
 
-        ;; :opt, :star, :plus
+        ;; nil path of :opt, :star
+        (and (= t2 nil) (#{:opt :star} (:tag g)))
+        {:tag :epsilon}
+
+        ;; 0 path of :opt, :star, :plus
         (and (= t2 0) (:parser g))
 	(recur (:parser g) ts)
 
@@ -151,24 +156,6 @@
   [grammar utrek]
   (reduce (fn [g [p n]] (assoc-in-grammar g p n)) grammar utrek))
 
-(defn children-of-node
-  "Given a grammar and path node within that grammar return the paths
-  of the children (:alt, :ord, and :cat nodes)."
-  [grammar node-path]
-  (let [node (get-in-grammar grammar node-path)
-        tag (:tag node)
-        base-path (if (CHILD-EDGE (last node-path))
-                    (conj node-path (:tag node))
-                    node-path)
-        sibs (cond
-               (#{:star :opt} tag) [[nil {:tag :epsilon}] [0 (:parser node)]]
-               (:parser node)      [[0 (:parser node)]]
-               (:parsers node)     (map-indexed vector (:parsers node))
-               (:parser2 node)     [[0 (:parser1 node)] [1 (:parser2 node)]]
-               :else               [])
-        children-paths (map (fn [[i n]] (conj base-path i)) sibs)]
-    (seq children-paths)))
-
 (declare trek)
 
 (defn paths-to-leaf
@@ -189,7 +176,46 @@
 
 (def memoized-paths-to-leaf (memoize paths-to-leaf))
 
-(defn get-parents*
+(defn get-descendants*
+  [grammar path pred avoid]
+  (let [node (get-in-grammar grammar path)
+        tag (:tag node)]
+    (cond
+      (or (avoid path) (nil? node))
+      []
+
+      (pred path)
+      [path]
+
+      (TERMINAL-TAGS tag)
+      []
+
+      (= :nt tag)
+      (get-descendants* grammar [(:keyword node)] pred (set/union #{path} avoid))
+
+      (or (= 1 (count path))
+          (CHILD-EDGE (last path)))
+      (get-descendants* grammar (conj path (:tag node)) pred (set/union #{path} avoid))
+
+      :else
+      (let [sibs (cond
+                   (#{:star :opt} tag) [[nil {:tag :epsilon}] [0 (:parser node)]]
+                   (:parser node)      [[0 (:parser node)]]
+                   (:parsers node)     (map-indexed vector (:parsers node))
+                   (:parser2 node)     [[0 (:parser1 node)] [1 (:parser2 node)]])
+            sib-paths (map (fn [[i n]] (conj path i)) sibs)
+            avoid (set/union (set sib-paths) avoid)
+            sib-desc (map #(get-descendants* grammar % pred (disj avoid %))
+                          sib-paths)]
+        (vec (apply concat sib-desc))))))
+
+(defn get-descendants
+  "Return a set of paths for which each p in the set is a descendent
+  of path for which (pred p) is true."
+  [grammar path pred]
+  (get-descendants* grammar path #(and (pred %) (not= % path)) #{}))
+
+(defn get-ancestors*
   [grammar path pred avoid]
   (cond
     (avoid path)
@@ -203,24 +229,30 @@
           avoid (set/union (set paths) avoid)]
       (apply
         set/union
-        (map #(get-parents* grammar % pred (disj avoid %))
+        (map #(get-ancestors* grammar % pred (disj avoid %))
              paths)))
 
     :else
     (recur grammar (pop path) pred (set/union #{path} avoid))))
 
-(defn get-parents
-  "Returns a set p paths for which each p is a parent of path in
-  grammar for which (pred p) is true. For example, to find the nearest
-  parent :cat nodes of my-path:
-      (get-parents g my-path #(= :cat (last %)))"
+(defn get-ancestors
+  "Returns a vector of paths for which each p in the vector is
+  a parent edge of path in grammar for which (pred p) is true. For
+  example, to find the nearest parent :cat nodes of my-path:
+  (get-ancestors g my-path #(= :cat (last %)))"
   [grammar path pred]
   (let [path (if (= 1 (count path)) path (pop path))]
-    (get-parents* grammar path pred #{})))
+    (get-ancestors* grammar path pred #{})))
 
-(defn get-weighted-parents
+(defn children-of-node
+  "Given a grammar and path node within that grammar return the paths
+  of the children (:alt, :ord, and :cat nodes)."
   [grammar path]
-  (get-parents grammar path #(WEIGHTED (last %))))
+  (seq (get-descendants grammar path #(CHILD-EDGE (last %)))))
+
+(defn get-weighted-ancestors
+  [grammar path]
+  (get-ancestors grammar path #(WEIGHTED (last %))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; trek functions
