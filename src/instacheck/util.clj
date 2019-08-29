@@ -47,23 +47,28 @@
   parent-child distances) and a start node. Returns a map of keys from
   trees with values that are the distance (hops) from the start key to
   that node/key."
-  [trees child-dists start]
-  (loop [pending {start 0}
-         all-dists {}]
-    (if (seq pending)
-      (let [[node ndist] (first (sort-by val pending))
-            new-pending (dissoc pending node)
-            dist (reduce
-                   (fn [a [n d]]
-                     (if (contains? all-dists n)
-                       a
-                       (assoc a n (+ ndist d))))
-                   {}
-                   (get child-dists node))]
-        (recur
-          (merge-with min new-pending dist)
-          (assoc all-dists node ndist)))
-      all-dists)))
+  [trees start & [child-dists]]
+  (let [child-dists (or child-dists
+                        (into {} (for [[n cs] (tree-deps trees)]
+                                   [n (into {} (for [c cs]
+                                                 [c (if (= c n) 0 1)]))])))]
+
+    (loop [pending {start 0}
+           all-dists {}]
+      (if (seq pending)
+        (let [[node ndist] (first (sort-by val pending))
+              new-pending (dissoc pending node)
+              dist (reduce
+                     (fn [a [n d]]
+                       (if (contains? all-dists n)
+                         a
+                         (assoc a n (+ ndist d))))
+                     {}
+                     (get child-dists node))]
+          (recur
+            (merge-with min new-pending dist)
+            (assoc all-dists node ndist)))
+        all-dists))))
 
 (def ^:dynamic *rnd* (java.util.Random.))
 
