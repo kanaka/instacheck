@@ -193,7 +193,8 @@ r1 = 'a' / '<' r1 '>'")
   (testing "instacheck tests"
     (testing "instacheck basics"
       (let [ebnf "root = ('foo' #'[0-9]' ) 'bar' *"
-            qc-res (core/instacheck #(<= (count %) 7) ebnf)]
+            qc-res (core/instacheck #(<= (count %) 7) ebnf
+                                    {:iterations 50})]
         (is (= false (:result qc-res)))
         (is (> (-> qc-res :fail first count) 7))
         (is (:shrunk qc-res))
