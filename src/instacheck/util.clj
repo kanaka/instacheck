@@ -65,14 +65,17 @@
           (assoc all-dists node ndist)))
       all-dists)))
 
+(def ^:dynamic *rnd* (java.util.Random.))
+
 (defn weighted-rand-nth
   "Take a sequence of val-weight pairs (can be a map of val to
   weights), chooses a weighted random value and returns [idx val]."
-  [vals-weights]
-  (let [cumm (map vector
+  [vals-weights & [rnd]]
+  (let [rnd (or rnd *rnd*)
+        cumm (map vector
                   (map first vals-weights)
                   (reductions + (map second vals-weights)))
-        ridx (rand (-> cumm last last))]
+        ridx (* (.nextDouble rnd) (-> cumm last last))]
     (some #(when (< ridx (second %)) (first %)) cumm)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

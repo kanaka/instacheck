@@ -231,7 +231,7 @@
   The resulting wtrek will then be passed to the reduce-wtrek function
   to propogate the weight reduction according reduce-mode."
   [grammar wtrek weights-to-reduce
-   & [{:keys [reduce-mode reducer-fn pick-mode pick-pred]
+   & [{:keys [reduce-mode reducer-fn pick-mode pick-pred rnd-obj]
        :or {reduce-mode :zero
             reducer-fn reducer-half
             pick-mode :weight-dist
@@ -257,7 +257,7 @@
                               :dist (get distances p)
                               :weight-dist (* w (get distances p)))])
         rpath (when (seq weighted-paths)
-                (util/weighted-rand-nth weighted-paths))]
+                (util/weighted-rand-nth weighted-paths rnd-obj))]
 ;;    (prn :rpath rpath :wtrek-w (get wtrek rpath) :wtr-w (get weights-to-reduce rpath))
     (if rpath
       (let [new-wtrek (assoc wtrek rpath (reducer-fn
