@@ -349,3 +349,12 @@
         g3 (select-keys g2 used)]
     g3))
 
+(defn prune-grammar->sorted-ebnf
+  [grammar {:keys [wtrek cycle-set] :as ctx}]
+  (let [red-grammar (prune-grammar grammar {:wtrek wtrek})
+        acyclic-grammar (apply dissoc red-grammar cycle-set)
+        rule-order (codegen/check-and-order-rules acyclic-grammar)
+        ordered (concat
+                  (map #(vector % (get acyclic-grammar %)) rule-order)
+                  (select-keys red-grammar cycle-set))]
+    (grammar/grammar->ebnf (reverse ordered))))

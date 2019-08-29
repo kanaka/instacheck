@@ -356,3 +356,5 @@ rS = #'\\s+'"]
       (let [ebnf "h2-attr = 'h2-attr'"]
         (is (= (ebnf-set (r/prune-grammar g5 {:wtrek w5 :start :h2-attr}))
                (ebnf-set (g/load-grammar ebnf)))))))))
+
+;; TODO: test prune-grammar->sorted-ebnf
