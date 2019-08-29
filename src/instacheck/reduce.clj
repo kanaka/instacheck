@@ -54,8 +54,8 @@
   "Takes a grammar and wtrek and returns a new reduced wtrek with
   weights reduced/propagated according to reduce-mode.
 
-  If the optional reduced-subset is then only those node will be
-  propagated. If reduced-subset is not specified then all
+  If the optional reduced-subset node set is then only those nodes
+  will be propagated. If reduced-subset is not specified then all
   reducible/weighted nodes will be considered. The former may result
   in a wtrek that is not fully reduced but the latter can take a while
   for large grammars/wtreks.
@@ -63,12 +63,12 @@
   The way that weights are reduced/propagated depends on reduce-mode:
 
     :zero
-      \"If all siblings are zero, reduce parent edge to zero.\"
+      If all siblings are zero, reduce parent edge to zero.
 
     :max-child:
-      \"If all siblings of a node have a weight that is less
-      than parent weight then reduce the parent to the largest sibling
-      weight.\"
+      If all siblings of a node have a weight that is less
+      than parent edge weight then reduce the parent edge weight to
+      the largest sibling weight.
 
       Algorithm/psuedocode:
       - pend <= reduced-subset OR all weighted nodes in the tree
@@ -84,9 +84,9 @@
 
 
     :reducer:
-      \"When all siblings are zero, reduce parent by reducer function
-      and distribute the removed weights to valid (no removed
-      descendant) children.\"
+      When all siblings of a node are zero, reduce parent edge weight
+      by reducer-fn function and distribute the removed weights to
+      valid (no removed descendant) child edges of node.
 
       Algorithm/psuedocode:
       - pend <= reduced-subset OR all weighted nodes in the tree
@@ -104,112 +104,125 @@
 
   Any zero weights in the :wtrek map represent a node edge that has
   been removed. If all edges of a node are 0 then this is represents
-  a node that has been removed. The normal algorithm will propagate
-  this correctly. However, if the propagation of 0 weights reaches the
-  root/start of the grammar and cannot propagate further then an
-  exception is thrown because this represents an invalid weighted
-  grammar; grammar productions could reach the removed node from the
-  root/start rule (a removed node does not even exist in the sense
-  that epsilon does).
+  a node that has been removed and the removal must be propagated up
+  the tree to the next weighted node edge. If the propagation of
+  removed nodes (0 weights) reaches the root/start of the grammar and
+  cannot propagate further then an exception is thrown because this
+  represents an invalid weighted grammar: grammar productions could
+  reach the removed node from the root/start rule (a removed node does
+  not exist in the sense that epsilon does).
 
   The propagation of node removals continues until there are no more
-  pending node to remove. The call to parent-search may add more nodes
-  to be removed but already removed nodes will not be added again so
-  the process will eventually terminate."
-  [grammar wtrek & [{:keys [reduced-subset reduce-mode reducer-fn]
-                     :or {reduce-mode :zero
-                          reducer-fn reducer-zero}
-                     :as opts}]]
+  pending node to remove. A node may have more than one parent which
+  means the number of nodes being considered during propagation may
+  increase temporarily but already removed nodes will not be added
+  again so the process will eventually terminate."
+  [grammar start-wtrek & [{:keys [reduced-subset reduce-mode reducer-fn]
+                           :or {reduce-mode :zero
+                                reducer-fn reducer-zero}
+                           :as opts}]]
   (assert (#{:zero :max-child :reducer} reduce-mode)
           (str "Invalid :reduce-mode " reduce-mode))
   (when (= :reducer reduce-mode)
     (assert reducer-fn ":reducer reduce-mode requires reducer-fn"))
-  (loop [wtrek wtrek
-         pend (set (filter #(grammar/WEIGHTED (last %))
-                           (map (comp pop key)
-                                (or reduced-subset
-                                    (weights/wtrek grammar)))))]
-    (if (not (seq pend))
-      wtrek
-      (let [[node & pend-left] pend
-            kids (grammar/children-of-node grammar node)
-            kid-weights (vals (select-keys wtrek kids))
-;;            _ (prn :node node :kids kids :kid-weights kid-weights)
-            max-kid-w (apply max kid-weights)
-            ;; nparents is weighted child edges of parents leading to node
-            nparents (filter
-                       #(contains? wtrek %)
-                       (grammar/get-ancestors
-                         grammar node #(grammar/WEIGHTED (last (pop %)))))
-;;            _ (prn :node node :max-kid-w max-kid-w :nparents nparents)
-            ;; Removed node must have at least one weighted parent in
-            ;; nparents that is not self-recursive (i.e. not lower
-            ;; than node in the same rule). If there are none than
-            ;; this indicates that node has no parents between itself
-            ;; and the root/start of the grammar.
-            nonrecur-nparents (filter #(not (= (take (count node) %) node))
-                                      nparents)]
-        (when (and (= 0 max-kid-w)
-                   (not (seq nonrecur-nparents)))
-          (throw (ex-info
-                   (str "Node " node " removed, has no parents")
-                   {:type :reduce-wtrek
-                    :cause :no-parents
-                    :node node
-                    :wtrek wtrek})))
+  (let [grammar-start [(:start (meta grammar))]
+        start-pend (set (filter #(grammar/WEIGHTED (last %))
+                                (map pop
+                                     (or reduced-subset
+                                         (keys (weights/wtrek grammar))))))]
+    (loop [wtrek start-wtrek
+           pend start-pend]
+      (if (not (seq pend))
+        wtrek
+        (let [[node & pend-left] pend
+              kids (grammar/children-of-node grammar node)
+              kid-weights (vals (select-keys wtrek kids))
+              ;;            _ (prn :node node :kids kids :kid-weights kid-weights)
+              max-kid-w (apply max kid-weights)
+              ;; nparents is weighted child edges of parents leading
+              ;; to node. all-nparents is the same but includes the
+              ;; grammar root path if there is no weighted path
+              ;; between node and the root.
+              all-nparents (grammar/get-ancestors
+                             grammar node #(or (= grammar-start %)
+                                               (and (grammar/WEIGHTED (last (pop %)))
+                                                    (contains? wtrek %))))
+              nparents (disj all-nparents grammar-start)
+              ;; big-nparents is reduction candidates. max-kid-w being
+              ;; greater than 0 only applies in the :max-child case.
+              big-nparents (set (filter #(> (get wtrek %) max-kid-w)
+                                       nparents))]
+          ;;(prn :node node :max-kid-w max-kid-w :nparents nparents :big-parent big-nparents)
+          ;; If node is removed and there are no weighted nodes
+          ;; between it and the grammar start/root then it's an
+          ;; invalid state.
+          (when (and (= 0 max-kid-w)
+                     (contains? all-nparents grammar-start))
+            (throw (ex-info
+                     (str "Node " node " removed, has root as parent")
+                     {:type :reduce-wtrek
+                      :cause :no-parents
+                      :grammar grammar
+                      :start-wtrek start-wtrek
+                      :opts opts
+                      :start-pend start-pend
+                      :node node
+                      :wtrek wtrek})))
 
-        (cond
-          ;; :zero and :reducer reduce-mode only apply when all
-          ;; children are zero. :max-child reduce-mode applies
-          ;; whenever the largest child is less than the parent.
-          (and (#{:zero :reducer} reduce-mode)
-               (not= 0 max-kid-w))
-          (recur wtrek pend-left)
+          (cond
+            ;; :zero and :reducer reduce-mode only apply when all
+            ;; children are zero. :max-child reduce-mode applies
+            ;; whenever the largest child is less than the parent.
+            (and (#{:zero :reducer} reduce-mode)
+                 (not= 0 max-kid-w))
+            (recur wtrek pend-left)
 
-          (#{:zero :max-child} reduce-mode)
-          (let [big-parents (set (filter #(> (get wtrek %) max-kid-w)
-                                         nparents))
-;;                _ (prn :node node :big-parents big-parents)
-                new-pend (set/union pend-left
-                                    (set (map pop big-parents)))
-                new-wtrek (reduce (fn [tk p] (assoc tk p max-kid-w))
-                                  wtrek
-                                  big-parents)]
-            (recur new-wtrek new-pend))
+            (#{:zero :max-child} reduce-mode)
+            (let [new-pend (set/union pend-left
+                                      (set (map pop big-nparents)))
+                  new-wtrek (reduce (fn [tk p] (assoc tk p max-kid-w))
+                                    wtrek
+                                    big-nparents)]
+              (recur new-wtrek new-pend))
 
-          :reducer
-          ;; All children of node are zero at this point.
-          (let [new-wtrek1 (reduce (fn [tk p]
-                                     (let [w (get tk p)]
-                                       (assoc tk p (reducer-fn w w))))
-                                   wtrek
-                                   nparents)
-                zero-parents (set (filter #(= 0 (get new-wtrek1 %))
-                                          nparents))
-                new-pend (set/union pend-left
-                                    (set (map pop zero-parents)))
-                acc-weights (reduce
-                              #(+ %1 (- (get wtrek %2) (get new-wtrek1 %2)))
-                              0
-                              nparents)
-                removed? (partial weights/removed-node? grammar new-wtrek1)
-                ;; only consider kids with no removed descendants
-                valid-kids (filter (fn [k]
-                                     (empty? (grammar/get-descendants
-                                               grammar k removed?)))
-                                   kids)
-                new-wtrek2 (reduce
-                             (fn [tk kid]
-                               (if (= nparents zero-parents)
-                                 (assoc tk kid 0)
+            :reducer
+            ;; All children of node are zero at this point.
+            (let [new-wtrek1 (reduce (fn [tk p]
+                                       (let [w (get tk p)]
+                                         (assoc tk p (reducer-fn w w))))
+                                     wtrek
+                                     big-nparents)
+                  zerod-parents (set (filter #(and (= 0 (get new-wtrek1 %))
+                                                   (not= (get wtrek %)
+                                                         (get new-wtrek1 %)))
+                                            big-nparents))
+                  ;; we need to recur to check zero'd parents
+                  new-pend (set/union pend-left
+                                      (set (map pop zerod-parents)))
+                  ;; accumulate the total reduction (might be multiple
+                  ;; parents reduced)
+                  acc-weights (reduce
+                                #(+ %1 (- (get wtrek %2) (get new-wtrek1 %2)))
+                                0
+                                big-nparents)
+                  ;; only consider kids with no removed descendants
+                  removed? (partial weights/removed-node? grammar new-wtrek1)
+                  valid-kids (filter (fn [k]
+                                       (empty? (grammar/get-descendants
+                                                 grammar k removed?)))
+                                     kids)
+                  ;;_ (prn :zerod-parents zerod-parents :acc-weights acc-weights)
+                  ;; Distribute weight evenly to the valid children
+                  new-wtrek2 (reduce
+                               (fn [tk kid]
                                  (assoc tk kid
                                         (int (Math/ceil
                                                (/ acc-weights
-                                                  (count valid-kids)))))))
-                             new-wtrek1
-                             valid-kids)]
-;;            (prn :reducer :node node :nparents nparents :zero-parents zero-parents)
-            (recur new-wtrek2 new-pend)))))))
+                                                  (count valid-kids))))))
+                               new-wtrek1
+                               valid-kids)]
+              ;;            (prn :reducer :node node :big-nparents big-nparents :zerod-parents zerod-parents)
+              (recur new-wtrek2 new-pend))))))))
 
 ;; ---------
 
@@ -263,7 +276,7 @@
       (let [new-wtrek (assoc wtrek rpath (reducer-fn
                                            (get wtrek rpath)
                                            (get weights-to-reduce rpath)))
-            rsubset (set (select-keys new-wtrek [rpath]))]
+            rsubset #{rpath}]
         (reduce-wtrek grammar new-wtrek (assoc opts :reduced-subset rsubset)))
       (do
 ;;        (println "******************* no rpath *******************")

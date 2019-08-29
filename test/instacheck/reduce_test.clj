@@ -127,7 +127,7 @@ rS = #'\\s+'")
                                      :reducer-fn r/reducer-zero})
                (r/reduce-wtrek g1 w {:reduce-mode :reducer
                                      :reducer-fn r/reducer-zero
-                                     :reduced-subset w})
+                                     :reduced-subset (set (keys w))})
                (merge w {[:foobar :alt 0] 50
                          [:foobar :alt 1] 50
                          [:start :alt 1] 0})))
@@ -142,7 +142,7 @@ rS = #'\\s+'")
         (is (= (r/reduce-wtrek g1 w {:reduce-mode :zero})
                (r/reduce-wtrek g1 w {:reduce-mode :reducer})
                (r/reduce-wtrek g1 w {:reduce-mode :reducer
-                                     :reduced-subset w})
+                                     :reduced-subset (set (keys w))})
                w))
         (is (= (r/reduce-wtrek g1 w {:reduce-mode :max-child})
                (merge w {[:start :alt 1] 25})))))
@@ -158,7 +158,7 @@ rS = #'\\s+'")
                                      :reducer-fn r/reducer-zero})
                (r/reduce-wtrek g1 w {:reduce-mode :reducer
                                      :reducer-fn r/reducer-zero
-                                     :reduced-subset w})
+                                     :reduced-subset (set (keys w))})
                (merge w {[:foobar :alt 0] 50
                          [:foobar :alt 1] 50
                          [:foobar :alt 1 :cat 1 :alt 0] 50
@@ -170,6 +170,17 @@ rS = #'\\s+'")
                  (merge w {[:foobar :alt 1] 50
                            [:foobar :alt 1 :cat 1 :alt 0] 25
                            [:foobar :alt 1 :cat 1 :alt 1] 25}))))
+        (testing "do not propogate if parent is already removed"
+          (let [w (merge w1-all {[:foobar :alt 0] 0
+                                 [:foobar :alt 1] 0
+                                 [:foobar :alt 1 :cat 1 :alt 0] 0
+                                 [:foobar :alt 1 :cat 1 :alt 1] 0
+                                 [:start :alt 0] 100
+                                 [:start :alt 1] 0})]
+            (is (= (r/reduce-wtrek g1 w {:reduce-mode :zero
+                                         :reduced-subset
+                                         ,,, #{[:foobar :alt 1 :cat 1 :alt 1]}})
+                   w))))
         (testing ":reducer propagate twice with 1 from [:foobar :alt 1] distributed and rounded up, and 50 from [:start :alt 1] distibuted evenly."
           (is (= (r/reduce-wtrek g1 (merge w {[:foobar :alt 1] 1})
                                  {:reduce-mode :reducer
