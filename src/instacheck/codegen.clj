@@ -41,12 +41,12 @@
 
 (defn- gen-alt
   "One of the values must occur."
-  [{:keys [path] :as ctx} tree indent]
+  [{:keys [path cur-nt] :as ctx} tree indent]
   (let [pre (apply str (repeat indent "  "))]
     (if (= 1 (count (-> tree :parsers)))
       (gen-ROUTE (update-in ctx [:path] conj 0)
                  (-> tree :parsers first) indent)
-      (str pre "(igen/freq [\n"
+      (str pre "(igen/freq " cur-nt " [\n"
            (string/join
              "\n"
              (for [[idx t] (map-indexed vector (-> tree :parsers))
@@ -60,9 +60,9 @@
 (defn- gen-ord
   "One of the values must occur. Like gen-alt with a preference for
   earlier values."
-  [{:keys [path] :as ctx} tree indent]
+  [{:keys [path cur-nt] :as ctx} tree indent]
   (let [pre (apply str (repeat indent "  "))]
-    (str pre "(igen/freq [\n"
+    (str pre "(igen/freq " cur-nt " [\n"
          (string/join
            "\n"
            (for [[idx adj t] [[0 1 (-> tree :parser1) ]
@@ -76,9 +76,9 @@
 
 (defn- gen-star
   "The value occurs 0 or 1 times."
-  [{:keys [path] :as ctx} tree indent]
+  [{:keys [path cur-nt] :as ctx} tree indent]
   (let [pre (apply str (repeat indent "  "))]
-    (str pre "(igen/freq [\n"
+    (str pre "(igen/freq " cur-nt " [\n"
          (string/join
            "\n"
            (for [[idx ind t] [[nil 2 {:tag :epsilon}]
@@ -95,9 +95,9 @@
 
 (defn- gen-opt
   "The value occurs 0 or 1 times."
-  [{:keys [path] :as ctx} tree indent]
+  [{:keys [path cur-nt] :as ctx} tree indent]
   (let [pre (apply str (repeat indent "  "))]
-    (str pre "(igen/freq [\n"
+    (str pre "(igen/freq " cur-nt " [\n"
          (string/join
            "\n"
            (for [[idx t] [[nil {:tag :epsilon}]

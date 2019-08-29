@@ -9,11 +9,13 @@
   generator branches via weights this version also allows all the
   weights to be zero and will throw at runtime rather than
   a definition time."
-  [pairs]
+  [id pairs]
   (if (= 0 (reduce + (map first pairs)))
     (gen/fmap
-      (fn [g] (throw (Exception.
-                       "Invalid call to instacheck.generators/freq with zero weights")))
+      (fn [g] (throw (ex-info
+                       (str "Invalid zero weight call to "
+                            "(instacheck.generators/freq " id " ...)")
+                       {:pairs pairs})))
       (gen/return ""))
     (gen/frequency (sort (comparator (fn [a b] (> (first a) (first b))))
                          pairs))))

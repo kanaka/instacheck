@@ -5,10 +5,10 @@
 
 (deftest freq-test
   (testing "freq"
-    (let [gen1 (igen/freq [[0   (gen/return "a")]
-                           [100 (gen/return "b")]])
-          gen2 (igen/freq [[0   (gen/return "a")]
-                           [0   (gen/return "b")]])]
+    (let [gen1 (igen/freq :foo [[0   (gen/return "a")]
+                                [100 (gen/return "b")]])
+          gen2 (igen/freq :bar [[0   (gen/return "a")]
+                                [0   (gen/return "b")]])]
 
       (testing "all \"b\""
         (is (every? #(= % "b")
