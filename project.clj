@@ -12,9 +12,39 @@
                  [org.clojure/test.check "0.10.0-alpha4"]
 
                  ;; Patched version (retain comments, parse path log)
-                 [kanaka/instaparse "1.4.9.2"]]
+                 [kanaka/instaparse "1.4.9.2"]
+
+                 ;; ClojureScript
+                 [org.clojure/clojurescript "1.10.520"]
+                 [cljs-node-io "1.1.2"]]
 
   :profiles {:cli  {:main instacheck.cli}
              :core {:main instacheck.core}}
+
+  :plugins [[lein-cljsbuild "1.1.7"]]
+
+  :cljsbuild
+  {:builds {:web
+            {:source-paths ["src"]
+             :compiler
+             {:main          "instacheck.core"
+              :asset-path    "/build/"
+              :output-to     "build/instacheck.js"
+              :output-dir    "build/web/"
+              :source-map    true
+              :optimizations :none
+              :pretty-print  true}}
+
+            ;; TODO: convert and use instacheck.cli for :main
+            :node
+            {:source-paths ["src"]
+             :compiler
+             {:target        :nodejs
+              :main          "instacheck.core"
+              :output-to     "instacheck.js"
+              :output-dir    "build/node"
+              :source-map    true
+              :optimizations :none
+              :pretty-print  true}} }}
 
   :main instacheck.cli)

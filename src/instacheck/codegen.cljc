@@ -255,7 +255,7 @@
   "Takes a rule name, rule grammar and indent level and returns the
   text of a generator for the rule body."
   [ctx k v indent]
-  (when (:verbose ctx) (util/pr-err "Generating rule body for:" k))
+  (when-let [log-fn (:log-fn ctx)] (log-fn "Generating rule body for:" k))
   (let [pre (apply str (repeat indent "  "))
         ctx (assoc ctx :cur-nt k :path [k])]
     (if (util/tree-matches #(= k %) v)
@@ -290,8 +290,8 @@
   rule. Only the start rule flattens the generated values into a final
   string."
   [{:keys [start] :as ctx} grammar]
-  (when (:verbose ctx)
-    (util/pr-err "Ordering rules and checking for mutual recursion"))
+  (when-let [log-fn (:log-fn ctx)]
+    (log-fn "Ordering rules and checking for mutual recursion"))
   (let [ordered-rules (check-and-order-rules grammar)
         start (or start (:start (meta grammar)))]
     (string/join
@@ -312,8 +312,8 @@
   generators (indexed by rule-name keyword)."
   [{:keys [function] :as ctx} grammar]
   (assert function "No function name specified")
-  (when (:verbose ctx)
-    (util/pr-err "Ordering rules and checking for mutual recursion"))
+  (when-let [log-fn (:log-fn ctx)]
+    (log-fn "Ordering rules and checking for mutual recursion"))
   (let [ordered-rules (check-and-order-rules grammar)
         partitioned-rules (map-indexed #(vector %1 %2)
                                        (partition-all RULES-PER-FUNC
@@ -351,8 +351,11 @@
   "Takes a src string containing Clojure code, evaluates it and
   returns the last thing evaluated."
   [src]
-  (binding [*ns* (create-ns 'instacheck.codegen)]
-    (load-string src)))
+  #?(:clj  (binding [*ns* (create-ns 'instacheck.codegen)]
+            (load-string src))
+     :cljs (throw
+             (js/Error.
+               "Code eval/load not yet supported in ClojureScript mode"))))
 
 (defn generator-func->generator
   "Takes a generator factory function, a start rule keyword, and an

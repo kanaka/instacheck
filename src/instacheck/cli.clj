@@ -13,8 +13,7 @@
             [instacheck.core :as icore]
             [instacheck.grammar :as igrammar]
             [instacheck.weights :as iweights]
-            [instacheck.reduce :as ireduce]
-            [instacheck.util :as iutil :refer [pr-err]]))
+            [instacheck.reduce :as ireduce]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Command line usage of ebnf
@@ -72,6 +71,12 @@
                     (for [[c co] cmd-options]
                       (str "\n" c " Options:\n"
                            (:summary (parse-opts [] co)))))))
+
+(defn pr-err
+  [& args]
+  (binding [*out* *err*]
+    (apply println args)
+    (flush)))
 
 (defn usage [& [errors]]
   (when (not (empty? errors))
@@ -254,7 +259,9 @@
                                       :grammar-updates :ebnf-output])
                    {:weights (merge comment-weights
                                     (:weights opts))
-                    :weights-res (atom {})})
+                    :weights-res (atom {})}
+                   (when (:verbose opts)
+                     {:log-fn pr-err}))
 
         ;;_ (prn :ctx ctx)
 

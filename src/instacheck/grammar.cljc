@@ -3,6 +3,7 @@
             [clojure.set :as set]
             [clojure.string :as string]
             [clojure.walk :refer [postwalk]]
+            #?(:cljs [cljs.reader :refer [read-string]])
 
             [instacheck.util :as util]
             [instaparse.core :as instaparse]))

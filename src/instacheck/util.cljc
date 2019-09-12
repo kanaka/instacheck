@@ -3,14 +3,6 @@
             [clojure.walk :refer [postwalk]]
             [clojure.string :as string]))
 
-(defn pr-err
-  [& args]
-  (binding [*out* *err*]
-    (apply println args)
-    (flush)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (defn tree-matches
   "Return seq of pred? matches for any node in the tree."
   [pred? tree]
@@ -70,18 +62,27 @@
             (assoc all-dists node ndist)))
         all-dists))))
 
-(def ^:dynamic *rnd* (java.util.Random.))
+#?(:clj
+    (def ^:dynamic *rnd* (java.util.Random.)))
 
-(defn weighted-rand-nth
-  "Take a sequence of val-weight pairs (can be a map of val to
-  weights), chooses a weighted random value and returns [idx val]."
-  [vals-weights & [rnd]]
-  (let [rnd (or rnd *rnd*)
-        cumm (map vector
-                  (map first vals-weights)
-                  (reductions + (map second vals-weights)))
-        ridx (* (.nextDouble rnd) (-> cumm last last))]
-    (some #(when (< ridx (second %)) (first %)) cumm)))
+#?(:clj
+    (defn weighted-rand-nth
+      "Take a sequence of val-weight pairs (can be a map of val to
+      weights), chooses a weighted random value and returns [idx val]."
+      [vals-weights & [rnd]]
+      (let [rnd (or rnd *rnd*)
+            cumm (map vector
+                      (map first vals-weights)
+                      (reductions + (map second vals-weights)))
+            ridx (* (.nextDouble rnd) (-> cumm last last))]
+        (some #(when (< ridx (second %)) (first %)) cumm)))
+
+   ;; TODO: support cljs:
+    ;; http://indiegamr.com/generate-repeatable-random-numbers-in-js/
+   :cljs (defn weighted-rand-nth
+           [vals-weights & [rnd]]
+           (throw (js/Error. "weighted-rand-nth not yet implemented in cljs"))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

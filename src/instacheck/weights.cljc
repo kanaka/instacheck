@@ -1,5 +1,6 @@
 (ns instacheck.weights
-  (:require [clojure.java.io :as io]
+  (:require #?(:clj  [clojure.java.io :as io]
+               :cljs [cljs-node-io.core :as io :refer [slurp spit]])
             [clojure.pprint :refer [pprint]]
             
             [instacheck.grammar :as grammar]))
