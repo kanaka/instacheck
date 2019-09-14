@@ -12,7 +12,7 @@
                  [org.clojure/test.check "0.10.0-alpha4"]
 
                  ;; Patched version (retain comments, parse path log)
-                 [kanaka/instaparse "1.4.9.2"]
+                 [kanaka/instaparse "1.4.9.3"]
 
                  ;; ClojureScript
                  [org.clojure/clojurescript "1.10.520"]

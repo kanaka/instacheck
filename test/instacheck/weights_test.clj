@@ -109,40 +109,82 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
 
 (deftest path-log-trek-test
   (testing "path-log-trek"
-    (is (= (w/path-log-trek g9 (c/parse p9 "a"))
-           {[:r :cat 1 :opt 0 :alt 0] 0,
-            [:r] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 0] 0,
-            [:r :cat 1 :opt nil] 1,
-            [:r :cat 1 :opt 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 0,
-            [:r :cat 0] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1] 0,
-            [:r :cat 1] 1,
-            [:r :cat 1 :opt 0 :alt 1] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 0,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
-    (is (= (w/path-log-trek g9 (c/parse p9 "acdccdeeec"))
-           {[:r :cat 1 :opt 0 :alt 0] 0,
-            [:r] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 0] 4,
-            [:r :cat 1 :opt nil] 0,
-            [:r :cat 1 :opt 0] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 7,
-            [:r :cat 0] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0] 6,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1] 6,
-            [:r :cat 1] 1,
-            [:r :cat 1 :opt 0 :alt 1] 1,
-            [:r :cat 1 :opt 0 :alt 1 :star nil] 9,
-            [:r :cat 1 :opt 0 :alt 1 :star 0] 10,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 4,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 2,
-            [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 3}))))
+    (let [pres1 (c/parse p7 "ab")
+          pres2 (c/parse p7 "aba")
+          pres3 (c/parse p9 "a")
+          pres4 (c/parse p9 "acdccdeeec")]
+
+      (is (= (-> pres1 meta :path-log)
+             [[:r]
+              [:r :star 0]
+              [:r :star 0 :cat 0]
+              [:r :star 0 :cat 1]
+              [:r :star 0 :cat 1 :star 0]]))
+      (is (= (w/path-log-trek g7 pres1)
+               {[:r] 1,
+                [:r :star nil] 0,
+                [:r :star 0] 1,
+                [:r :star 0 :cat 0] 1,
+                [:r :star 0 :cat 1] 1,
+                [:r :star 0 :cat 1 :star nil] 0,
+                [:r :star 0 :cat 1 :star 0] 1}))
+      (is (= (-> pres2 meta :path-log)
+             [[:r]
+              [:r :star 0]
+              [:r :star 0 :cat 0]
+              [:r :star 0 :cat 1]
+              [:r :star 0 :cat 1 :star 0]
+              [:r :star 0]
+              [:r :star 0 :cat 0]
+              [:r :star 0 :cat 1]]))
+      (is (= (w/path-log-trek g7 pres2)
+               {[:r] 1,
+                [:r :star nil] 1,
+                [:r :star 0] 2,
+                [:r :star 0 :cat 0] 2,
+                [:r :star 0 :cat 1] 2,
+                [:r :star 0 :cat 1 :star nil] 1,
+                [:r :star 0 :cat 1 :star 0] 1}))
+
+      (is (= (-> pres3 meta :path-log)
+             [[:r]
+              [:r :cat 0]
+              [:r :cat 1]]))
+      (is (= (w/path-log-trek g9 pres3)
+             {[:r] 1,
+              [:r :cat 0] 1,
+              [:r :cat 1] 1,
+              [:r :cat 1 :opt nil] 1,
+              [:r :cat 1 :opt 0] 0,
+              [:r :cat 1 :opt 0 :alt 0] 0,
+              [:r :cat 1 :opt 0 :alt 1] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 0] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
+      (is (= (w/path-log-trek g9 pres4)
+             {
+              [:r] 1,
+              [:r :cat 0] 1,
+              [:r :cat 1] 1,
+              [:r :cat 1 :opt nil] 0,
+              [:r :cat 1 :opt 0] 1,
+              [:r :cat 1 :opt 0 :alt 0] 0,
+              [:r :cat 1 :opt 0 :alt 1] 1,
+              [:r :cat 1 :opt 0 :alt 1 :star nil] 6,
+              [:r :cat 1 :opt 0 :alt 1 :star 0] 7,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 4,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0] 4,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 0] 4,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1] 4,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 2,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 2,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 3})))))
 
 (deftest path-log-wtrek-test
   (testing "wtrek, path-log-wtrek"
@@ -185,18 +227,18 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
               [:r :star 0 :cat 1 :star 0] 0,
               [:r :star 0 :cat 1 :star nil] 1}))
       (is (= (w/path-log-wtrek g7 (c/parse p7 "ab"))
-             {[:r :star 0] 2,
-              [:r :star nil] 1,
+             {[:r :star 0] 1,
+              [:r :star nil] 0,
               [:r :star 0 :cat 1 :star 0] 1,
-              [:r :star 0 :cat 1 :star nil] 1}))
+              [:r :star 0 :cat 1 :star nil] 0}))
       (is (= (w/path-log-wtrek g7 (c/parse p7 "aa"))
              {[:r :star 0] 2,
               [:r :star nil] 1,
               [:r :star 0 :cat 1 :star 0] 0,
               [:r :star 0 :cat 1 :star nil] 2}))
       (is (= (w/path-log-wtrek g7 (c/parse p7 "abb"))
-             {[:r :star 0] 3,
-              [:r :star nil] 2,
+             {[:r :star 0] 1,
+              [:r :star nil] 0,
               [:r :star 0 :cat 1 :star 0] 2,
               [:r :star 0 :cat 1 :star nil] 1})))
 
@@ -213,12 +255,12 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
               [:r :cat 2 :opt nil] 1}))
       (is (= (w/path-log-wtrek g8 (c/parse p8 "ab"))
              {[:r :cat 1 :star 0] 1,
-              [:r :cat 1 :star nil] 1,
+              [:r :cat 1 :star nil] 0,
               [:r :cat 2 :opt 0] 0,
               [:r :cat 2 :opt nil] 1}))
       (is (= (w/path-log-wtrek g8 (c/parse p8 "abc"))
              {[:r :cat 1 :star 0] 1,
-              [:r :cat 1 :star nil] 1,
+              [:r :cat 1 :star nil] 0,
               [:r :cat 2 :opt 0] 1,
               [:r :cat 2 :opt nil] 0}))
       (is (= (w/path-log-wtrek g8 (c/parse p8 "ac"))
@@ -281,23 +323,23 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
              {[:r :cat 1 :opt 0 :alt 0] 0,
               [:r :cat 1 :opt nil] 0,
               [:r :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 2,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 1,
               [:r :cat 1 :opt 0 :alt 1] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 2,
+              [:r :cat 1 :opt 0 :alt 1 :star nil] 0,
+              [:r :cat 1 :opt 0 :alt 1 :star 0] 1,
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 1,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 0,
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 0}))
       (is (= (w/path-log-wtrek g9 (c/parse p9 "accdcdee"))
              {[:r :cat 1 :opt 0 :alt 0] 0,
               [:r :cat 1 :opt nil] 0,
               [:r :cat 1 :opt 0] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 7,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0] 3,
               [:r :cat 1 :opt 0 :alt 1] 1,
-              [:r :cat 1 :opt 0 :alt 1 :star nil] 8,
-              [:r :cat 1 :opt 0 :alt 1 :star 0] 9,
+              [:r :cat 1 :opt 0 :alt 1 :star nil] 4,
+              [:r :cat 1 :opt 0 :alt 1 :star 0] 5,
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt 0] 2,
-              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 3,
+              [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 0 :plus 0 :cat 1 :opt nil] 1,
               [:r :cat 1 :opt 0 :alt 1 :star 0 :alt 1] 2})))))
 
 (deftest print-weights-test
