@@ -161,13 +161,27 @@
 
 (defn ebnf-sample-seq
   "Returns an infinite sequence of generated values based on the ebnf
-  definition."
+  definition. Like test.check/sample-seq but takes an ebnf grammar
+  definition and uses an optional opts map to specify weights and
+  max-size."
   [ebnf & [opts]]
   (let [{:keys [weights max-size]} opts
         gen (ebnf->gen {:weights weights} ebnf)]
     (if max-size
       (gen/sample-seq gen max-size)
       (gen/sample-seq gen))))
+
+(defn ebnf-generate
+  "Returns a single sample value from the generator. Like
+  test.check/generate but but takes an ebnf grammar definition and
+  uses an optional opts map to specify weights, size and seed."
+  [ebnf & [opts]]
+  (let [{:keys [weights size seed]} opts
+        gen (ebnf->gen {:weights weights} ebnf)]
+    (cond
+      (and size seed) (gen/generate gen size seed)
+      size            (gen/generate gen size)
+      :else           (gen/generate gen))))
 
 (defn instacheck
   "Instacheck a function with randomly generated test cases. The

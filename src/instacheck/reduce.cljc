@@ -63,44 +63,56 @@
   The way that weights are reduced/propagated depends on reduce-mode:
 
     :zero
-      If all siblings are zero, reduce parent edge to zero.
+      If all siblings of a node have a zero weight, reduce parent edge
+      weights to zero.
+
+      Algorithm/psuedocode:
+      - pend := reduced-subset OR all weighted nodes in the tree
+      - while pend:
+        - node   := pop(pend)
+        - mcw    := max-child-weight(node)
+        - if mcw > 0: continue at while
+        - foreach pnode of parents(node):
+          - push(pend, pnode)
+          - wtrek[pnode] := mcw
 
     :max-child:
       If all siblings of a node have a weight that is less
-      than parent edge weight then reduce the parent edge weight to
+      than parent edge weight then reduce the parent edge weights to
       the largest sibling weight.
 
       Algorithm/psuedocode:
-      - pend <= reduced-subset OR all weighted nodes in the tree
+      - pend := reduced-subset OR all weighted nodes in the tree
       - while pend:
-        - node   <= pop(pend)
-        - mcw    <= get max child weight
-        - pnodes <= parents(node)
-        - foreach pnode of pnodes:
+        - node   := pop(pend)
+        - mcw    := max-child-weight(node)
+        - foreach pnode of parents(node):
           - if pnode child weight towards node > mcw
             - then:
               - push(pend, pnode)
-              - wtrek[pnode] <= mcw
-
+              - wtrek[pnode] := mcw
 
     :reducer:
-      When all siblings of a node are zero, reduce parent edge weight
+      When all siblings of a node are zero, reduce parent edge weights
       by reducer-fn function and distribute the removed weights to
       valid (no removed descendant) child edges of node.
 
       Algorithm/psuedocode:
-      - pend <= reduced-subset OR all weighted nodes in the tree
+      - pend := reduced-subset OR all weighted nodes in the tree
       - while pend:
-        - node   <= pop(pend)
-        - if all node's children are 0:
-          - reduce node's parents w/ reducer function, accumulate the
-            total amount that was reduced
-            - if all node's parent's direct children are 0, add node's
-              parent to pend
-          - for each of node's children with no removed descendants:
-            - distribute accumulated weight evenly among those
-              children (rounding up unless all parents are 0 in which
-              case use 0)
+        - node   := pop(pend)
+        - mcw    := max-child-weight(node)
+        - if mcw > 0: continue at while
+        - acc    := 0
+        - foreach pnode of parents(node):
+          - tmp := wtrek[pnode]
+          - wtrek[pnode] := reducer-fn(wtrek[pnode])
+          - acc  += tmp - wtrek[pnode]
+          - if max-child-weight(pnode) == 0:
+            - push(pend, pnode)
+        - cnodes := children-with-no-removed-descendants(node)
+        - foreach cnode of cnodes:
+          - wtrek[code] += acc / count(cnodes)
 
   Any zero weights in the :wtrek map represent a node edge that has
   been removed. If all edges of a node are 0 then this is represents
@@ -250,6 +262,8 @@
             pick-mode :weight-dist
             pick-pred identity}
        :as opts}]]
+  (assert (#{:weight :dist :weight-dist} pick-mode)
+          (str "Invalid :pick-mode " pick-mode))
   (let [big? #(and % (> % 0))
         bigs (filter #(and (big? (get weights-to-reduce %))
                            (big? (get wtrek %)))
