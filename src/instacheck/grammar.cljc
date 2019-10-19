@@ -255,6 +255,26 @@
   [grammar path]
   (get-ancestors grammar path #(WEIGHTED (last %))))
 
+(defn- combine-strings*
+  [node]
+  (if (and (= :cat (:tag node))
+           (:parsers node)
+           (-> node :parsers last :tag (= :string)))
+    (let [rps (reverse (:parsers node))
+          strs (reverse (take-while #(= :string (:tag %)) rps))
+          new-ps (reverse (conj (drop (count strs) rps)
+                                {:tag :string
+                                 :string (string/join
+                                           "" (map :string strs))}))]
+      (assoc node :parsers new-ps))
+    node))
+
+(defn combine-strings
+  "Combine strings and spaces that immediately follow each other in
+  a concatenation."
+  [grammar]
+  (postwalk combine-strings* grammar))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; trek functions
 

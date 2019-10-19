@@ -279,6 +279,8 @@ r = 'a' ( 'b' | ( ( 'c' 'd'? )+ | 'e')* )?")
            (g/get-ancestors g1 [:foobar] #(g/WEIGHTED (last %)))
            #{[:start :alt]}))))
 
+;; TODO: test combine-strings
+
 (deftest children-of-node-test
   (testing "children-of-node"
     (testing "Children of an alt node"
