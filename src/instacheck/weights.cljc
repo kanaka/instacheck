@@ -179,6 +179,8 @@
       (recur grammar wtrek (conj path :plus 0) (:parser node) ltrek likelihood))))
 
 (defn likelihood-trek
+  "Given a grammar and a wtrek, return an ltrek with the likelihood of
+  reaching every node of grammar."
   [grammar wtrek]
   (let [start (:start (meta grammar))]
     (ltrek* grammar wtrek [start] (get grammar start) {} 1)))
@@ -233,6 +235,8 @@
                       (conj path :plus) next-dist) (inc next-dist))))))
 
 (defn distance-trek
+  "Given a grammar and a wtrek, return dtrek with distance to reach
+  every node of grammar."
   [grammar]
   (let [start (:start (meta grammar))]
     (dtrek* grammar [start] (get grammar start) {} 0)))

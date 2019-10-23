@@ -27,10 +27,9 @@
     (int (/ start-weight 2))))
 
 (defn reducer-div
-  "If parsed-weight > 0 then returns the next weight in seq-ladder
-  that is lower than start-weight.Designed to be used as a partial
-  like this:
-      (partial reducer-div 2)"
+  "If parsed-weight > 0 then returns the start-weight divided by the
+  divisor:
+      (partial reducer-div 4)"
   [divisor start-weight parsed-weight]
   (if (= parsed-weight 0)
     start-weight
@@ -298,7 +297,7 @@
 
 ;; ---
 
-(defn prune-node*
+(defn- prune-node*
   "Internal: Used by prune-node* to prune rule bodies/productions
   based on :wtrek"
   [node wtrek cur-path]

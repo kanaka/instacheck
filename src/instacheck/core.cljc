@@ -107,6 +107,13 @@
 "))
 
 (defn grammar->ns
+  "Translate a grammar to namespaced Clojure file. Optional third
+  argument specifies a list of additional namespace requires to add to
+  the ns definition. :namespace must be specified in ctx with the
+  namespace name to use (e.g. 'myproj.generators'). If :function is
+  specified in ctx then a single generator factory function will be
+  generated in the namespace with the value of :function as the name,
+  otherwise each generator will be defined as a separate function."
   [ctx grammar & [extra-requires]]
   (assert (:namespace ctx) ":namespace required in ctx")
   (str (clj-prefix (:namespace ctx) extra-requires)

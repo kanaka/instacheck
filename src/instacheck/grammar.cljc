@@ -245,15 +245,15 @@
   (let [path (if (= 1 (count path)) path (pop path))]
     (get-ancestors* grammar path pred #{})))
 
+(defn get-weighted-ancestors
+  [grammar path]
+  (get-ancestors grammar path #(WEIGHTED (last %))))
+
 (defn children-of-node
   "Given a grammar and path node within that grammar return the paths
   of the children (:alt, :ord, and :cat nodes)."
   [grammar path]
   (seq (get-descendants grammar path #(CHILD-EDGE (last %)))))
-
-(defn get-weighted-ancestors
-  [grammar path]
-  (get-ancestors grammar path #(WEIGHTED (last %))))
 
 (defn- combine-strings*
   [node]
