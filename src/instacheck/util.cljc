@@ -56,7 +56,7 @@
                          a
                          (assoc a n (+ ndist d))))
                      {}
-                     (get child-dists node))]
+                     (child-dists node))]
           (recur
             (merge-with min new-pending dist)
             (assoc all-dists node ndist)))
