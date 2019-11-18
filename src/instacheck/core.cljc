@@ -201,23 +201,26 @@
   passes the test. If a failure is detected then the shrinking process
   will performed. The return value is the quick-check return status.
 
-  The optional qc-opts parameter can be used to specify the following
+  The optional opts parameter can be used to specify the following
   quick-check options:
     - iterations: number of iterations to check before success (default: 10)
     - max-size:   maximum size for all internal generators (default: 200)
     - seed:       starting seed for generating test cases
-    - report-fn:  function to call with a report after each iteration"
-  [check-fn ebnf-or-gen & [qc-opts]]
-  (let [gen-to-check (if (= (type ebnf-or-gen)
+    - report-fn:  function to call with a report after each iteration
+
+  If the ebnf-or-gen parameter is not already a generator, then the
+  opts parameter can also contain a weights configuration that will be
+  used with ebnf->gen to create the generator for use with
+  quick-check."
+  [check-fn ebnf-or-gen & [opts]]
+  (let [{:keys [iterations max-size report-fn seed weights]
+         :or {iterations 10
+              max-size 200
+              report-fn (fn [& args] true)}} opts
+        gen-to-check (if (= (type ebnf-or-gen)
                             clojure.test.check.generators.Generator)
                        ebnf-or-gen
-                       (ebnf->gen {} ebnf-or-gen))
-        {:keys [iterations seed max-size report-fn]
-         :or {iterations 10
-              ;;seed 1
-              max-size 200
-              report-fn (fn [& args] true)
-              }} qc-opts
+                       (ebnf->gen {:weights weights} ebnf-or-gen))
         p (clojure.test.check.properties/for-all* [gen-to-check] check-fn)]
     (clojure.test.check/quick-check iterations p
                                     :seed seed
