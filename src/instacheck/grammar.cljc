@@ -101,8 +101,56 @@
 	:else
 	nil))))
 
+(defn walk-grammar*
+  "Internal: Breadth-first walk a grammar tree transforming it by
+  applying f at each path/node"
+  [node path f]
+  (let [tag (:tag node)
+        node (cond
+               ;; :alt, :cat
+               (:parsers node)
+               ;; doall to force depth-first
+               (assoc node
+                      :parsers (map-indexed
+                                 #(walk-grammar*
+                                    %2 (conj path tag %1) f)
+                                 (:parsers node)))
+               ;; :ord
+               (:parser2 node)
+               (assoc node
+                      :parser1 (walk-grammar*
+                                 (:parser1 node) (conj path tag 0) f)
+                      :parser2 (walk-grammar*
+                                 (:parser2 node) (conj path tag 1) f))
+
+               ;; :opt, :star, :plus
+               (:parser node)
+               (assoc node
+                      :parser (walk-grammar*
+                                (:parser node) (conj path tag 0) f))
+
+               ;; :nt, :string, :regexp, :epsilon
+               :else
+               node)]
+    (f path node)))
+
+(defn walk-grammar-rule
+  "Breadth-first walk a grammar rule transforming it by applying f at
+  each path/node"
+  [tree rule f]
+  (walk-grammar* tree [rule] f))
+
+(defn walk-grammar
+  "Breadth-first walk a grammar transforming it by applying f at each
+  path/node"
+  [grammar f]
+  (into {}
+        (for [[k n] grammar]
+          [k (walk-grammar* n [k] f)])))
+
 (defn- update-in-grammar*
-  "Internal: walk a grammar rule tree applying tx at each path/node"
+  "Internal: update a grammar node at the given path in the grammar by
+  running (apply f node args) on the node."
   [targ-path path node f args]
   (let [tag (:tag node)]
     (cond
@@ -336,10 +384,19 @@
   (apply merge (map (fn [[k v]] (trek-rule* [k] v tx)) grammar)))
 
 (defn trek
-  "Return a trek of the grammar (map of paths to node values)."
+  "Return a trek (value trek) of the grammar (map of paths to node
+  values)."
   [grammar]
   (trek-grammar grammar (fn [p n] (when (LEAF-TAGS (:tag n))
                                      {p (node-to-val n n)}))))
+
+
+(defn ntrek
+  "Return a ntrek (node trek) of the grammar (map of paths to leaf
+  nodes)."
+  [grammar]
+  (trek-grammar grammar (fn [p n] (when (LEAF-TAGS (:tag n))
+                                    {p n}))))
 
 (defn comment-trek
   "Return a trek with comment values (map of grammar paths to parsed
@@ -395,24 +452,29 @@
             (assoc-in [:parser]
                       (path->tree* (get-in tree [:parser]) rest-p leaf)))))))
 
+(defn ntrek->grammar
+  "Take an ntrek (node trek) and convert it back into a grammar"
+  [ntrek]
+  (into
+    {}
+    (for [[rule-kw rules] (group-by (comp first key) ntrek)]
+      [rule-kw
+       ;; Build up the tree one path at a time by reducing using
+       ;; path->tree*. Then convert each :parsers val from an
+       ;; idx->val map to a sorted list of vals.
+       (postwalk
+         #(if (:parsers %)
+            (assoc % :parsers (vals (sort-by key (:parsers %))))
+            %)
+         (reduce
+           (fn [tree [p leaf]]
+             (path->tree* tree (subvec p 1) leaf))
+           nil
+           rules))])))
+
 (defn trek->grammar
-  "Take a trek and convert it back into a grammar"
+  "Take a trek (value trek) and convert it back into a grammar"
   [trek]
   (let [ntrek (into {} (for [[k v] trek] [k (val-to-node v)]))]
-    (into
-      {}
-      (for [[rule-kw rules] (group-by (comp first key) ntrek)]
-        [rule-kw
-         ;; Build up the tree one path at a time by reducing using
-         ;; path->tree*. Then convert each :parsers val from an
-         ;; idx->val map to a sorted list of vals.
-         (postwalk
-           #(if (:parsers %)
-              (assoc % :parsers (vals (sort-by key (:parsers %))))
-              %)
-           (reduce
-             (fn [tree [p leaf]]
-               (path->tree* tree (subvec p 1) leaf))
-             nil
-             rules))]))))
+    (ntrek->grammar ntrek)))
 

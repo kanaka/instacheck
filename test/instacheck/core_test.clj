@@ -187,7 +187,12 @@ r1 = 'a' / '<' r1 '>'")
       (let [samps (take 20 (core/ebnf-sample-seq
                              "r1 = ('a' | 'b' )*"
                              {:weights {[:r1 :star 0 :alt 0] 0}}))]
-        (is (every? #(re-seq #"b*" %) samps))))))
+        (is (every? #(re-seq #"b*" %) samps))))
+    (testing "weight with recursion"
+      (let [samps (take 50 (core/ebnf-sample-seq
+                             "r = '0' | '1' r | '2'"
+                             {:weights {[:r :alt 2] 0}}))]
+        (is (every? #(not (re-seq #"2" %)) samps))))))
 
 (deftest instacheck
   (testing "instacheck tests"

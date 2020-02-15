@@ -53,6 +53,7 @@ r10 = r1+
 r11 = 'a' | r11
 r12 = ( 'a' | 'b' )*
 r13 = ( 'a' | 'b' )?
+r14 = '0' | '1' r14 | '2'
 ")
 
 (def ebnf7 "
@@ -88,36 +89,39 @@ r1 = 'i' #'[0-9]*'")
              "(gen/tuple\n  gen-r1\n  gen-r2)")))
     (testing "alt"
       (is (= (#'cg/gen-rule-body {} :r6 (:r6 g6) 0)
-             "(igen/freq :r6 [\n  [100\n    gen-r1]\n  [100\n    gen-r2]])"))
+             "(igen/freq [:r6 :alt] [\n  [100\n    gen-r1]\n  [100\n    gen-r2]])"))
       (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r6 (:r6 g6) 0)
-             "(igen/freq :r6 [\n  [(get w [:r6 :alt 0] 100)\n    gen-r1]\n  [(get w [:r6 :alt 1] 100)\n    gen-r2]])")))
+             "(igen/freq [:r6 :alt] [\n  [(get w [:r6 :alt 0] 100)\n    gen-r1]\n  [(get w [:r6 :alt 1] 100)\n    gen-r2]])")))
     (testing "ord"
       (is (= (#'cg/gen-rule-body {} :r7 (:r7 g6) 0)
-             "(igen/freq :r7 [\n  [101\n    gen-r1]\n  [100\n    gen-r2]])"))
+             "(igen/freq [:r7 :ord] [\n  [101\n    gen-r1]\n  [100\n    gen-r2]])"))
       (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r7 (:r7 g6) 0)
-             "(igen/freq :r7 [\n  [(get w [:r7 :ord 0] 101)\n    gen-r1]\n  [(get w [:r7 :ord 1] 100)\n    gen-r2]])")))
+             "(igen/freq [:r7 :ord] [\n  [(get w [:r7 :ord 0] 101)\n    gen-r1]\n  [(get w [:r7 :ord 1] 100)\n    gen-r2]])")))
     (testing "star"
       (is (= (#'cg/gen-rule-body {} :r8 (:r8 g6) 0)
-             "(igen/freq :r8 [\n  [100\n    (gen/return \"\")]\n  [100\n    (igen/vector+\n      gen-r1)]])"))
+             "(igen/freq [:r8 :star] [\n  [100\n    (gen/return \"\")]\n  [100\n    (igen/vector+\n      gen-r1)]])"))
       (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r8 (:r8 g6) 0)
-             "(igen/freq :r8 [\n  [(get w [:r8 :star nil] 100)\n    (gen/return \"\")]\n  [(get w [:r8 :star 0] 100)\n    (igen/vector+\n      gen-r1)]])")))
+             "(igen/freq [:r8 :star] [\n  [(get w [:r8 :star nil] 100)\n    (gen/return \"\")]\n  [(get w [:r8 :star 0] 100)\n    (igen/vector+\n      gen-r1)]])")))
     (testing "opt"
       (is (= (#'cg/gen-rule-body {} :r9 (:r9 g6) 0)
-             "(igen/freq :r9 [\n  [100\n    (gen/return \"\")]\n  [100\n    gen-r1]])"))
+             "(igen/freq [:r9 :opt] [\n  [100\n    (gen/return \"\")]\n  [100\n    gen-r1]])"))
       (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r9 (:r9 g6) 0)
-             "(igen/freq :r9 [\n  [(get w [:r9 :opt nil] 100)\n    (gen/return \"\")]\n  [(get w [:r9 :opt 0] 100)\n    gen-r1]])")))
+             "(igen/freq [:r9 :opt] [\n  [(get w [:r9 :opt nil] 100)\n    (gen/return \"\")]\n  [(get w [:r9 :opt 0] 100)\n    gen-r1]])")))
     (testing "plus"
       (is (= (#'cg/gen-rule-body {} :r10 (:r10 g6) 0)
              "(igen/vector+\n  gen-r1)")))
     (testing "recursion"
       (is (= (#'cg/gen-rule-body {} :r11 (:r11 g6) 0)
-             "(gen/recursive-gen\n  (fn [inner]\n    (igen/freq :r11 [\n      [100\n        (gen/return \"a\")]\n      [100\n        inner]]))\n  (gen/return \"a\"))")))
+             "(gen/recursive-gen\n  (fn [inner]\n    (igen/freq [:r11 :alt] [\n      [100\n        (gen/return \"a\")]\n      [100\n        inner]]))\n  (gen/return \"a\"))")))
     (testing "alt within star"
       (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r12 (:r12 g6) 0)
-	     "(igen/freq :r12 [\n  [(get w [:r12 :star nil] 100)\n    (gen/return \"\")]\n  [(get w [:r12 :star 0] 100)\n    (igen/vector+\n      (igen/freq :r12 [\n        [(get w [:r12 :star 0 :alt 0] 100)\n          (gen/return \"a\")]\n        [(get w [:r12 :star 0 :alt 1] 100)\n          (gen/return \"b\")]]))]])")))
+             "(igen/freq [:r12 :star] [\n  [(get w [:r12 :star nil] 100)\n    (gen/return \"\")]\n  [(get w [:r12 :star 0] 100)\n    (igen/vector+\n      (igen/freq [:r12 :star 0 :alt] [\n        [(get w [:r12 :star 0 :alt 0] 100)\n          (gen/return \"a\")]\n        [(get w [:r12 :star 0 :alt 1] 100)\n          (gen/return \"b\")]]))]])")))
     (testing "alt within opt"
       (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r13 (:r13 g6) 0)
-	     "(igen/freq :r13 [\n  [(get w [:r13 :opt nil] 100)\n    (gen/return \"\")]\n  [(get w [:r13 :opt 0] 100)\n    (igen/freq :r13 [\n      [(get w [:r13 :opt 0 :alt 0] 100)\n        (gen/return \"a\")]\n      [(get w [:r13 :opt 0 :alt 1] 100)\n        (gen/return \"b\")]])]])")))))
+             "(igen/freq [:r13 :opt] [\n  [(get w [:r13 :opt nil] 100)\n    (gen/return \"\")]\n  [(get w [:r13 :opt 0] 100)\n    (igen/freq [:r13 :opt 0 :alt] [\n      [(get w [:r13 :opt 0 :alt 0] 100)\n        (gen/return \"a\")]\n      [(get w [:r13 :opt 0 :alt 1] 100)\n        (gen/return \"b\")]])]])")))
+    (testing "weight indexing with middle recursive element removed"
+      (is (= (#'cg/gen-rule-body {:weights-lookup? true} :r14 (:r14 g6) 0)
+             "(gen/recursive-gen\n  (fn [inner]\n    (igen/freq [:r14 :alt] [\n      [(get w [:r14 :alt 0] 100)\n        (gen/return \"0\")]\n      [(get w [:r14 :alt 1] 100)\n        (gen/tuple\n          (gen/return \"1\")\n          inner)]\n      [(get w [:r14 :alt 2] 100)\n        (gen/return \"2\")]]))\n  (igen/freq [:r14 :alt] [\n    [(get w [:r14 :alt 0] 100)\n      (gen/return \"0\")]\n    [(get w [:r14 :alt 2] 100)\n      (gen/return \"2\")]]))")))))
 
 
 (deftest check-and-order-rules-test

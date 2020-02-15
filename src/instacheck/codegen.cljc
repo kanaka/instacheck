@@ -4,6 +4,7 @@
 
             [alandipert.kahn :as kahn]
             [instacheck.util :as util]
+            [instacheck.grammar :as grammar]
 
             ;; Needed here to evaluated generated generators
             [clojure.test.check.generators :as gen]
@@ -28,31 +29,26 @@
   [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))]
     (if (= 1 (count (-> tree :parsers)))
-      (gen-ROUTE (update-in ctx [:path] conj 0)
-                 (-> tree :parsers first) indent)
+      (gen-ROUTE ctx (-> tree :parsers first) indent)
       (str pre "(gen/tuple\n"
            (string/join
              "\n"
-             (for [[idx t] (map-indexed vector (-> tree :parsers))
-                   :let [ctx (update-in ctx [:path] conj idx)]]
+             (for [t (-> tree :parsers)]
                (gen-ROUTE ctx t (+ 1 indent))))
            ")"))))
 
 
 (defn- gen-alt
   "One of the values must occur."
-  [{:keys [path cur-nt] :as ctx} tree indent]
+  [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))]
     (if (= 1 (count (-> tree :parsers)))
-      (gen-ROUTE (update-in ctx [:path] conj 0)
-                 (-> tree :parsers first) indent)
-      (str pre "(igen/freq " cur-nt " [\n"
+      (gen-ROUTE ctx (-> tree :parsers first) indent)
+      (str pre "(igen/freq " (conj (:path tree) :alt) " [\n"
            (string/join
              "\n"
-             (for [[idx t] (map-indexed vector (-> tree :parsers))
-                   :let [path (conj (:path ctx) idx)
-                         ctx (assoc ctx :path path)]]
-               (str pre "  [" (weight-str ctx) "\n"
+             (for [t (-> tree :parsers)]
+               (str pre "  [" (weight-str ctx (:path t)) "\n"
                     (gen-ROUTE ctx t (+ 2 indent))
                     "]")))
            "])"))))
@@ -60,32 +56,29 @@
 (defn- gen-ord
   "One of the values must occur. Like gen-alt with a preference for
   earlier values."
-  [{:keys [path cur-nt] :as ctx} tree indent]
+  [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))]
-    (str pre "(igen/freq " cur-nt " [\n"
+    (str pre "(igen/freq " (conj (:path tree) :ord) " [\n"
          (string/join
            "\n"
-           (for [[idx adj t] [[0 1 (-> tree :parser1) ]
-                              [1 0 (-> tree :parser2)]]
-                 :let [path (conj (:path ctx) idx)
-                       ctx (assoc ctx :path path)]]
-             (str pre "  [" (weight-str ctx adj) "\n"
+           (for [[adj t] [[1 (-> tree :parser1) ]
+                          [0 (-> tree :parser2)]]]
+             (str pre "  [" (weight-str ctx (:path t) adj) "\n"
                   (gen-ROUTE ctx t (+ 2 indent))
                   "]")))
          "])")))
 
 (defn- gen-star
   "The value occurs 0 or 1 times."
-  [{:keys [path cur-nt] :as ctx} tree indent]
+  [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))]
-    (str pre "(igen/freq " cur-nt " [\n"
+    (str pre "(igen/freq " (conj (:path tree) :star) " [\n"
          (string/join
            "\n"
-           (for [[idx ind t] [[nil 2 {:tag :epsilon}]
-                              [0   3 (:parser tree)]]
-                 :let [path (conj (:path ctx) idx)
-                       ctx (assoc ctx :path path)]]
-             (str pre "  [" (weight-str ctx) "\n"
+           (for [[idx ind t] [[nil 2 {:tag :epsilon
+                                      :path (conj (:path tree) :star nil)}]
+                              [0   3 (:parser tree)]]]
+             (str pre "  [" (weight-str ctx (:path t)) "\n"
                   (if (= 0 idx)
                     (str pre "    (igen/vector+\n"
                          (gen-ROUTE ctx t (+ ind indent)) ")")
@@ -95,25 +88,22 @@
 
 (defn- gen-opt
   "The value occurs 0 or 1 times."
-  [{:keys [path cur-nt] :as ctx} tree indent]
+  [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))]
-    (str pre "(igen/freq " cur-nt " [\n"
+    (str pre "(igen/freq " (conj (:path tree) :opt) " [\n"
          (string/join
            "\n"
-           (for [[idx t] [[nil {:tag :epsilon}]
-                          [0 (-> tree :parser)]]
-                 :let [path (conj (:path ctx) idx)
-                       ctx (assoc ctx :path path)]]
-             (str pre "  [" (weight-str ctx) "\n"
+           (for [[idx t] [[nil {:tag :epsilon
+                                :path (conj (:path tree) :opt nil)}]
+                          [0 (-> tree :parser)]]]
+             (str pre "  [" (weight-str ctx (:path t)) "\n"
                   (gen-ROUTE ctx t (+ 2 indent))
                   "]")))
          "])")))
 
 (defn- gen-plus
   [ctx tree indent]
-  (let [pre (apply str (repeat indent "  "))
-        ;; Update path
-        ctx (update-in ctx [:path] conj 0)]
+  (let [pre (apply str (repeat indent "  "))]
     (str pre "(igen/vector+\n"
          (gen-ROUTE ctx (:parser tree) (+ 1 indent)) ")")))
 
@@ -145,12 +135,12 @@
 
 ;; TODO: mutual recursion?
 (defn- gen-nt
-  [{:keys [cur-nt] :as ctx} tree indent]
+  [ctx tree indent]
   (let [pre (apply str (repeat indent "  "))
         kw (:keyword tree)
         kw-ns (namespace kw)
         gen-dict (:gen-dict ctx)]
-    (str pre (if (= cur-nt kw)
+    (str pre (if (= (first (:path tree)) kw)
                "inner"
                (if kw-ns
                  (str kw-ns "/" (name kw))
@@ -176,20 +166,18 @@
    :nt      gen-nt})
 
 (defn- gen-ROUTE
-  [{:keys [debug path] :as ctx} tree indent]
+  [{:keys [debug] :as ctx} tree indent]
   (let [pre (apply str (repeat indent "  "))
         tag (:tag tree)
-        f (get tag-to-gen (:tag tree))
-        ;; Update path
-        ctx (update-in ctx [:path] conj tag)]
+        f (get tag-to-gen (:tag tree))]
     (assert f (str "No generator found for " tag))
     (str (if debug
-           (str pre ";; path: " path "\n")
+           (str pre ";; path: " (conj (:path tree) tag) "\n")
            "")
          (f ctx tree indent))))
 
 (defn- weight-str
-  [{:keys [weights weights-lookup? weights-res path] :as ctx} & [adjust]]
+  [{:keys [weights weights-lookup? weights-res]} path & [adjust]]
   (let [pw (get weights path)
         weight (+ (or adjust 0)
                   (if pw pw 100))
@@ -212,29 +200,32 @@
   them."
   [tree k]
   (let [parent? (fn [t] (util/tree-matches
-                          #(= % {:tag :nt :keyword k}) t))]
+                          #(and (= :nt (:tag %))
+                                (= k (:keyword %))) t))]
     (walk/postwalk
       (fn [node]
         (if (and (map? node) (parent? node))
           ;; Prune/rewrite the matches sub-trees
-          (condp = (:tag node)
-            :alt  (let [ps (filter #(not (parent? %))
-                                   (:parsers node))]
-                    (if (seq ps)
-                      {:tag :alt
-                       :parsers ps}
-                      {:tag :epsilon}))
-            :ord  (let [p1 (:parser1 node)
-                        p1? (parent? p1)
-                        p2 (:parser2 node)
-                        p2? (parent? p2)]
-                    (cond
-                      (and p1? p2?) {:tag :epsilon}
-                      p1?           p2
-                      p2?           p1))
-            :star {:tag :epsilon}
-            :opt  {:tag :epsilon}
-            node)
+          (assoc
+            (condp = (:tag node)
+              :alt  (let [ps (filter #(not (parent? %))
+                                     (:parsers node))]
+                      (if (seq ps)
+                        {:tag :alt
+                         :parsers ps}
+                        {:tag :epsilon}))
+              :ord  (let [p1 (:parser1 node)
+                          p1? (parent? p1)
+                          p2 (:parser2 node)
+                          p2? (parent? p2)]
+                      (cond
+                        (and p1? p2?) {:tag :epsilon}
+                        p1?           p2
+                        p2?           p1))
+              :star {:tag :epsilon}
+              :opt  {:tag :epsilon}
+              node)
+            :path (:path node))
           node))
       tree)))
 
@@ -257,13 +248,14 @@
   [ctx k v indent]
   (when-let [log-fn (:log-fn ctx)] (log-fn "Generating rule body for:" k))
   (let [pre (apply str (repeat indent "  "))
-        ctx (assoc ctx :cur-nt k :path [k])]
-    (if (util/tree-matches #(= k %) v)
+        tree (grammar/walk-grammar-rule v k (fn [p n] (assoc n :path p)))]
+    (if (util/tree-matches #(and (= :nt (:tag %))
+                                 (= k (:keyword %))) tree)
       (str pre "(gen/recursive-gen\n"
            pre "  (fn [inner]\n"
-           (gen-ROUTE ctx v (+ 2 indent)) ")\n"
-           (gen-ROUTE ctx (prune-rule-recursion v k) (+ 1 indent)) ")")
-      (str (gen-ROUTE ctx v indent)))))
+           (gen-ROUTE ctx tree (+ 2 indent)) ")\n"
+           (gen-ROUTE ctx (prune-rule-recursion tree k) (+ 1 indent)) ")")
+      (str (gen-ROUTE ctx tree indent)))))
 
 (defn check-and-order-rules
   "Takes an instaparse grammar and returns a sequence of the rule
