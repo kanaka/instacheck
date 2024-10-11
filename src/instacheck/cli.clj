@@ -104,8 +104,6 @@
 
 (defn do-clj
   [ctx parser clj-ns]
-  (when (not clj-ns)
-    (usage ["clj mode requires namespace"]))
   (let [grammar (igrammar/parser->grammar parser)]
     (println (icore/grammar->ns (assoc ctx :namespace clj-ns) grammar))))
 
@@ -122,8 +120,6 @@
 
 (defn do-samples
   [ctx parser dir number]
-  (when (not dir)
-    (usage ["samples mode requires SAMPLE_DIR"]))
   (let [genfn (icore/ebnf->gen ctx parser)
         samples (gen/sample genfn number)]
     (output-samples ctx dir samples)))
@@ -132,8 +128,6 @@
 
 (defn do-parse
   [ctx parser files]
-  (when (empty? files)
-    (usage ["parse mode requires FILE list"]))
   (let [texts-ids (map #(vector (slurp %) %) files)
         data (try
                (icore/parse-wtreks parser texts-ids)
@@ -204,10 +198,6 @@
 
 (defn do-check
   [ctx parser dir cmd opts]
-  (when (not dir)
-    (usage ["check mode requires SAMPLE_DIR"]))
-  (when (empty? cmd)
-    (usage ["check mode requires CMD args"]))
   (io/make-parents (sample-path dir 0))
   (loop [run 1
          qc-res {:result true}]
@@ -267,18 +257,30 @@
 
         res (condp = cmd
               "clj"
-              (do-clj ctx ebnf-parser (first cmd-args))
+              (let [clj-ns (first cmd-args)]
+                (when (not clj-ns) (usage ["clj mode requires namespace"]))
+                (do-clj ctx ebnf-parser clj-ns))
               "samples"
-              (do-samples ctx ebnf-parser (first cmd-args) (:samples opts))
+              (let [dir (first cmd-args)]
+                (when (not dir) (usage ["samples mode requires SAMPLE_DIR"]))
+                (do-samples ctx ebnf-parser dir (:samples opts)))
               "parse"
-              (do-parse ctx ebnf-parser cmd-args)
+              (let [files cmd-args]
+                (when (empty? files) (usage ["parse mode requires FILE list"]))
+                (do-parse ctx ebnf-parser files))
               "check-once"
-              (do-check ctx ebnf-parser (first cmd-args) check-cmd
-                        (merge (select-keys opts [:seed :iterations])
-                               {:runs 1}))
+              (let [dir (first cmd-args)]
+                (when (not dir) (usage ["check mode requires SAMPLE_DIR"]))
+                (when (empty? check-cmd) (usage ["check mode requires CMD args"]))
+                (do-check ctx ebnf-parser dir check-cmd
+                          (merge (select-keys opts [:seed :iterations])
+                                 {:runs 1})))
               "check"
-              (do-check ctx ebnf-parser (first cmd-args) check-cmd
-                        (select-keys opts [:runs :iterations])))]
+              (let [dir (first cmd-args)]
+                (when (not dir) (usage ["check mode requires SAMPLE_DIR"]))
+                (when (empty? check-cmd) (usage ["check mode requires CMD args"]))
+                (do-check ctx ebnf-parser dir check-cmd
+                          (select-keys opts [:runs :iterations]))))]
 
     (when-let [weights-output (:weights-output opts)]
       (iweights/save-weights weights-output @(:weights-res ctx)))
