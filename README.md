@@ -134,10 +134,10 @@ by zero) and then run the tests again:
 
 ```bash
 rm tmp/samp*
-lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh %
     # increase frequency of "0" [:any-number :alt 0] to 1000
 rm tmp/samp*
-lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh -q %
+lein run check test/bc.ebnf --weights tmp/bc-weights.edn tmp/ -- test/testbc.sh %
 ```
 
 Parse weights out of an existing test case then use those weights to
