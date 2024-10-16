@@ -1,4 +1,4 @@
-# Instacheck 0.9.2
+# Instacheck 0.9.3
 
 *Instaparse meets test.check: property-based testing with inputs defined as EBNF grammars*
 
@@ -19,7 +19,7 @@ smallest version that still fails.
 Add the following to your Clojure dependencies:
 
 ```clojure
-[kanaka/instacheck "0.9.2"]
+[kanaka/instacheck "0.9.3"]
 ```
 
 Here is a simple example of using instacheck to test a function:
