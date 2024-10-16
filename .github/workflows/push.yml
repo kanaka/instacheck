@@ -1,0 +1,48 @@
+name: Push (build and unit test)
+
+on:
+  push: {}
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch: {}
+
+jobs:
+  clj-build-and-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: zulu
+          java-version: 11
+      - name: Install Clojure and Tools
+        uses: DeLaGuardo/setup-clojure@10.2
+        with:
+          lein: 'latest'               # Leiningen
+          bb: 'latest'
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+          # List all files containing dependencies:
+          key: cljdeps-${{ hashFiles('project.clj') }}
+          restore-keys: cljdeps-
+
+      - name: Run lein test
+        run: lein test
+
+  # Make sure cljs at least compiles
+  cljs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile cljs
+        run: lein cljsbuild once node
+      - name: Run entrypoints
+        run: node ./instacheck.js
