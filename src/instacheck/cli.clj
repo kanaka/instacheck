@@ -153,18 +153,13 @@
 
 ;; do-check
 
-(defn run-test
-  [ctx raw-cmd sample-path sample]
-  (let [sfile (clojure.java.io/as-file sample-path)
-        swriter (io/writer sfile)
-        cmd (if (seq (keep #(re-find #"%" %) raw-cmd))
+(defn run-cmd
+  [ctx raw-cmd sample-path]
+  (let [cmd (if (seq (keep #(re-find #"%" %) raw-cmd))
               (map #(string/replace % #"%" sample-path) raw-cmd)
               (conj raw-cmd sample-path))
-        res (do
-              (println "Running:" (string/join " " cmd))
-              (.write swriter sample)
-              (.flush swriter)
-              (apply sh cmd))]
+        _ (println "Running:" (string/join " " cmd))
+        res (apply sh cmd)]
     (when (:verbose ctx)
       (when (:out res) (print "Out:" (:out res)))
       (when (:err res) (print "Err:" (:err res))))
@@ -174,16 +169,24 @@
                (str "Fail (exit code " (:exit res) ")")))
     (zero? (:exit res))))
 
+(defn run-test
+  [ctx check-fn sample-path sample]
+  (let [sfile (clojure.java.io/as-file sample-path)
+        swriter (io/writer sfile)]
+    (.write swriter sample)
+    (.flush swriter)
+    (check-fn ctx sample-path)))
+
 (defn check-and-report
-  [ctx generator dir cmd opts]
+  [ctx generator dir check-fn opts]
   (io/make-parents (sample-path dir 0))
   (let [cur-state (atom nil)
         cur-idx (atom 0)
-        check-fn (fn [sample]
-                   (run-test ctx
-                             cmd
-                             (sample-path dir (swap! cur-idx inc))
-                             sample))
+        wrap-check-fn (fn [sample]
+                        (run-test ctx
+                                  check-fn
+                                  (sample-path dir (swap! cur-idx inc))
+                                  sample))
         report-fn (fn [r]
                     (when (:verbose ctx)
                       (prn :report (update-in
@@ -193,11 +196,11 @@
                       (reset! cur-state (:type r))
                       (pr-err (str "NEW STATE: " (name (:type r))))))
         qc-opts (merge opts {:report-fn report-fn})
-        res (icore/instacheck check-fn generator qc-opts)]
+        res (icore/instacheck wrap-check-fn generator qc-opts)]
     res))
 
 (defn do-check
-  [ctx parser dir cmd opts]
+  [ctx parser dir check-fn opts]
   (io/make-parents (sample-path dir 0))
   (loop [run 1
          qc-res {:result true}]
@@ -210,7 +213,7 @@
             res-file (io/file run-dir "result.edn")
             weights-file (io/file run-dir "weights.edn")
             generator (icore/ebnf->gen ctx parser)
-            qc-res (check-and-report ctx generator run-dir cmd opts)]
+            qc-res (check-and-report ctx generator run-dir check-fn opts)]
         (pr-err "Saving weights to" (str weights-file))
         (iweights/save-weights weights-file @(:weights-res ctx))
         (pr-err "Saving result map to" (str res-file))
@@ -234,6 +237,9 @@
                                               (cmd-options cmd)))
         _ (when (:help (:options cmd-opts)) (usage))
         _ (when (:errors cmd-opts) (usage (:errors cmd-opts)))
+        check-fn (when check-cmd
+                   (fn [ctx sample-path]
+                     (run-cmd ctx check-cmd sample-path)))
         [ebnf & cmd-args] (:arguments cmd-opts)
         _ (when (not ebnf) (usage ["EBNF-FILE required"]))
         opts (into {} (filter (comp not nil? second)
@@ -271,15 +277,15 @@
               "check-once"
               (let [dir (first cmd-args)]
                 (when (not dir) (usage ["check mode requires SAMPLE_DIR"]))
-                (when (empty? check-cmd) (usage ["check mode requires CMD args"]))
-                (do-check ctx ebnf-parser dir check-cmd
+                (when (not check-fn) (usage ["check mode requires CMD args"]))
+                (do-check ctx ebnf-parser dir check-fn
                           (merge (select-keys opts [:seed :iterations])
                                  {:runs 1})))
               "check"
               (let [dir (first cmd-args)]
                 (when (not dir) (usage ["check mode requires SAMPLE_DIR"]))
-                (when (empty? check-cmd) (usage ["check mode requires CMD args"]))
-                (do-check ctx ebnf-parser dir check-cmd
+                (when (not check-fn) (usage ["check mode requires CMD args"]))
+                (do-check ctx ebnf-parser dir check-fn
                           (select-keys opts [:runs :iterations]))))]
 
     (when-let [weights-output (:weights-output opts)]
