@@ -155,4 +155,4 @@ lein run samples test/bc.ebnf --weights tmp/bc-weights2.edn tmp/
 Copyright © Joel Martin
 
 Distributed under the Mozilla Public License either version 2.0 or (at
-your option) any later version.
+your option) any later version. See LICENSE for more details.
